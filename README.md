@@ -69,6 +69,9 @@ hastighed og længde. Det aktive klip er markeret; klik for at springe til et kl
 omdøbes med ✎ (eller dobbeltklik på navnet) – også fra listen over gemte sessioner. De gemte
 filer i `sessions\` får samme nye navn.
 
+**Byg lignende:** "🔁 Byg lignende" (ved sessionens navn eller i listen) laver en ny session med
+præcis samme indstillinger og videoudvalg, men nye klip – den forrige sessions stykker undgås.
+
 **Rediger klip:** Hold musen over et klip: 🔄 bytter det med et andet stykke video i samme hastighed
 og længde (helst en video, der ikke allerede er med – tryk igen for et nyt forslag), ✕ fjerner det.
 Træk et klip for at flytte det. Slag- og vib-scriptet bygges om med sessionens indstillinger, og

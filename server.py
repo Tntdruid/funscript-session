@@ -205,38 +205,22 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json({"started": True})
 
         if path == "/api/sessions/build":
-            try:
-                minutes = float(data.get("minutes", 15))
-                clip_seconds = data.get("clipSeconds")
-                video_ids = data.get("videoIds") or None
-                videos = LIBRARY.videos()
-                if video_ids:
-                    wanted = {int(i) for i in video_ids}
-                    videos = [v for v in videos if v["id"] in wanted]
-                session = build_session(
-                    videos, int(minutes * 60000),
-                    clip_ms=float(clip_seconds) * 1000 if clip_seconds else None,
-                    curve=data.get("curve", "constant"),
-                    target=data.get("targetSpeed") or None,
-                    seed=data.get("seed"),
-                    scripts=LIBRARY.script_actions,
-                    max_speed=data.get("maxSpeed") or None,
-                    smooth=data.get("smooth", True) is not False,
-                    vib_scripts=LIBRARY.vib_actions,
-                    vib_mode=data.get("vibMode") if data.get("vibMode") in ("only", "none") else "derive",
-                    lang=self.lang(),
-                )
-            except (ValueError, TypeError) as exc:
-                return self.send_json({"error": str(exc)}, 400)
-            if data.get("name"):
-                session["name"] = str(data["name"])[:120]
-            saved = LIBRARY.save_session(session)
-            try:
-                saved["file"] = str(LIBRARY.export_session(saved))
-            except OSError as exc:
-                saved["file"] = None
-                saved["exportError"] = str(exc)
-            return self.send_json(saved)
+            return self.build_and_save(data)
+
+        m = re.fullmatch(r"/api/sessions/(\d+)/similar", path)
+        if m:  # same settings and video selection, new clips
+            session = LIBRARY.session(int(m.group(1)))
+            if not session:
+                return self.send_error(404)
+            p = session["params"]
+            return self.build_and_save({
+                "minutes": p.get("minutes", session["totalMs"] / 60000),
+                "clipSeconds": (p["clipMs"] / 1000) if p.get("clipMs") else None,
+                "curve": p.get("curve", "constant"), "targetSpeed": p.get("targetSpeed"),
+                "maxSpeed": p.get("maxSpeed"), "smooth": p.get("smooth", True),
+                "vibMode": p.get("vibMode", "derive"), "videoIds": p.get("videoIds"),
+                "seed": data.get("seed"), "avoid": session["clips"],
+            })
 
         if path == "/api/resume":
             if data.get("sessionId") and data.get("ms") is not None:
@@ -312,6 +296,44 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_json({"ok": True})
 
     # ------------------------------------------------------------ helpers
+    def build_and_save(self, data):
+        """Build a session from builder settings, save it, export its files and reply."""
+        try:
+            minutes = float(data.get("minutes", 15))
+            clip_seconds = data.get("clipSeconds")
+            video_ids = data.get("videoIds") or None
+            videos = LIBRARY.videos()
+            if video_ids:
+                wanted = {int(i) for i in video_ids}
+                videos = [v for v in videos if v["id"] in wanted]
+            session = build_session(
+                videos, int(minutes * 60000),
+                clip_ms=float(clip_seconds) * 1000 if clip_seconds else None,
+                curve=data.get("curve", "constant"),
+                target=data.get("targetSpeed") or None,
+                seed=data.get("seed"),
+                scripts=LIBRARY.script_actions,
+                max_speed=data.get("maxSpeed") or None,
+                smooth=data.get("smooth", True) is not False,
+                vib_scripts=LIBRARY.vib_actions,
+                vib_mode=data.get("vibMode") if data.get("vibMode") in ("only", "none") else "derive",
+                lang=self.lang(),
+                avoid=data.get("avoid"),
+            )
+        except (KeyError, ValueError, TypeError) as exc:
+            return self.send_json({"error": str(exc)}, 400)
+        # remember the selection so "build similar" can reuse it later
+        session["params"]["videoIds"] = sorted(int(i) for i in video_ids) if video_ids else None
+        if data.get("name"):
+            session["name"] = str(data["name"])[:120]
+        saved = LIBRARY.save_session(session)
+        try:
+            saved["file"] = str(LIBRARY.export_session(saved))
+        except OSError as exc:
+            saved["file"] = None
+            saved["exportError"] = str(exc)
+        return self.send_json(saved)
+
     def lang(self):
         return "en" if (self.headers.get("X-Lang") or "").lower() == "en" else "da"
 

@@ -1062,7 +1062,7 @@ def _same_content(v):
 
 def build_session(videos, total_ms, clip_ms=None, curve="constant", target=None,
                   seed=None, scripts=None, max_speed=None, smooth=True,
-                  vib_scripts=None, vib_mode="derive", lang="da"):
+                  vib_scripts=None, vib_mode="derive", lang="da", avoid=None):
     """Pick clips from `videos` so they add up to `total_ms` at a matching speed.
 
     `scripts` maps video id -> [(at, pos)] (or is a function that loads them) and is used
@@ -1099,6 +1099,11 @@ def build_session(videos, total_ms, clip_ms=None, curve="constant", target=None,
 
     usage = {same_content(v): 0 for v in eligible}
     used = {same_content(v): [] for v in eligible}
+    # "build similar": treat the previous session's clips as already used, so new parts are picked
+    by_id = {v["id"]: v for v in eligible}
+    for clip in avoid or []:
+        if clip["videoId"] in by_id:
+            used[same_content(by_id[clip["videoId"]])].append((clip["startMs"], clip["endMs"]))
     clips = []
     elapsed = 0
     while total_ms - elapsed > 1000 and len(clips) < 500:

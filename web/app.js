@@ -663,9 +663,11 @@ async function loadSessions() {
       </div>
       <a href="/api/sessions/${s.id}/funscript" title="${t('Download samlet .funscript')}">⬇</a>
       ${s.hasVib ? `<a href="/api/sessions/${s.id}/funscript?track=vib" title="${t('Download vibrations-script (.vib.funscript)')}">vib</a>` : ''}
+      <button class="sim" title="${t('Byg en ny session med samme indstillinger, men andre klip')}">🔁</button>
       <button class="ren" title="${t('Omdøb')}">✎</button>
       <button class="del" title="${t('Slet')}">✕</button>`;
     li.querySelector('.s-main').addEventListener('click', async () => openSession(await api(`/api/sessions/${s.id}`)));
+    li.querySelector('.sim').addEventListener('click', () => buildSimilar(s.id));
     li.querySelector('.ren').addEventListener('click', async () => {
       const name = prompt(t('Nyt navn til sessionen:'), s.name);
       if (name && name.trim() && name.trim() !== s.name) {
@@ -847,7 +849,7 @@ function updateClipInfo() {
 
 const strip = {
   box: $('sessionStrip'), title: $('sessionTitle'), input: $('sessionTitleInput'),
-  rename: $('renameBtn'), meta: $('sessionMeta'), list: $('clipStrip'),
+  rename: $('renameBtn'), similar: $('similarBtn'), meta: $('sessionMeta'), list: $('clipStrip'),
 };
 
 function videoInfo(id) {
@@ -963,6 +965,23 @@ function moveClip(from, to) {
   const [moved] = clips.splice(from, 1);
   clips.splice(to, 0, moved);
   editSession('edit', { clips }, to);
+}
+
+/** New session with the same settings and video selection as session `id`, new clips. */
+async function buildSimilar(id) {
+  const status = state.session?.id === id ? strip.meta : ui.buildStatus;
+  status.textContent = t('Bygger lignende session…');
+  strip.similar.disabled = true;
+  try {
+    const session = await api(`/api/sessions/${id}/similar`, {
+      method: 'POST', body: { seed: Math.floor(Math.random() * 1e9) },
+    });
+    await openSession(session);
+  } catch (err) {
+    status.textContent = err.message;
+  } finally {
+    strip.similar.disabled = false;
+  }
 }
 
 async function renameSession(id, name) {
@@ -1466,6 +1485,7 @@ resumeUi.yes.addEventListener('click', resumeSession);
 resumeUi.no.addEventListener('click', dismissResume);
 window.addEventListener('pagehide', () => savePosition(true));
 strip.rename.addEventListener('click', startRename);
+strip.similar.addEventListener('click', () => state.session && buildSimilar(state.session.id));
 strip.title.addEventListener('dblclick', startRename);
 strip.input.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') finishRename(true);
