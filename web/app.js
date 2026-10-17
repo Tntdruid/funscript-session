@@ -8,6 +8,7 @@ const ui = {
   remuxBox: $('remuxBox'), remuxBtn: $('remuxBtn'), remuxStatus: $('remuxStatus'), remuxBar: $('remuxBar'),
   emptyState: $('emptyState'), playBtn: $('playBtn'), prevBtn: $('prevBtn'), nextBtn: $('nextBtn'),
   timeNow: $('timeNow'), timeTotal: $('timeTotal'), clipInfo: $('clipInfo'), volume: $('volume'),
+  levelBtn: $('levelBtn'),
   liveCanvas: $('liveCanvas'), timelineCanvas: $('timelineCanvas'),
   lengthChips: $('lengthChips'), customMinutes: $('customMinutes'), clipLength: $('clipLength'),
   speedSlider: $('speedSlider'), speedLabel: $('speedLabel'), curveChips: $('curveChips'),
@@ -143,6 +144,7 @@ async function saveExportPath() {
 async function loadLibrary(remuxStatus = null) {
   const { videos } = await api('/api/library');
   state.library = videos;
+  updateLoudnessTarget();
   renderCategories();
   renderLibrary();
   renderRemux(remuxStatus);
@@ -768,7 +770,7 @@ async function goToClip(index, offsetMs = 0) {
   state.clipIndex = index;
   state.sessionTime = clip.offsetMs + offsetMs;
   deviceCursor = -1;
-  target.volume = Number(ui.volume.value);
+  applyVolume();
   target.defaultPlaybackRate = state.rate;
   target.playbackRate = state.rate;
   target.muted = false;
@@ -796,6 +798,7 @@ function setPlaying(playing) {
   ui.playBtn.textContent = playing ? '❚❚' : '▶';
   const el = players[active];
   if (playing) {
+    setupAudio();
     if (state.session && !state.markedPlayed) {
       state.markedPlayed = true;
       api(`/api/sessions/${state.session.id}/played`, { method: 'POST', body: {} }).catch(() => {});
@@ -1055,6 +1058,117 @@ function dismissResume() {
   resumeUi.box.hidden = true;
   resumePoint = null;
   api('/api/resume', { method: 'POST', body: {} }).catch(() => {});
+}
+
+// ------------------------------------------------------------------ audio levelling
+// Videos differ by up to ~30 dB. Each one's loudness is measured on the server; here every
+// player gets a gain (volume × per-video correction) followed by a gentle compressor and a
+// limiter, so quiet videos can be raised without distorting.
+
+const GAIN_MIN_DB = -15;
+const GAIN_MAX_DB = 18;
+let audio = null;          // { ctx, gains, comp, limiter }
+let loudnessTarget = null; // median loudness of the library (dB)
+let levelAudio = loadJson('levelAudio', true);
+
+function setupAudio() {
+  if (audio) {
+    if (audio.ctx.state === 'suspended') audio.ctx.resume().catch(() => {});
+    return;
+  }
+  try {
+    const ctx = new AudioContext();
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -24; comp.knee.value = 12; comp.ratio.value = 3;
+    comp.attack.value = 0.01; comp.release.value = 0.3;
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -2; limiter.knee.value = 0; limiter.ratio.value = 20;
+    limiter.attack.value = 0.002; limiter.release.value = 0.1;
+    const gains = players.map((p) => {
+      const gain = ctx.createGain();
+      ctx.createMediaElementSource(p).connect(gain);
+      p.volume = 1; // volume is applied in the gain node from now on
+      return gain;
+    });
+    audio = { ctx, gains, comp, limiter };
+    routeAudio();
+    applyVolume();
+  } catch (err) {
+    console.warn('Web Audio ikke tilgængelig', err);
+  }
+}
+
+function routeAudio() {
+  if (!audio) return;
+  const { ctx, gains, comp, limiter } = audio;
+  [...gains, comp, limiter].forEach((node) => node.disconnect());
+  if (levelAudio) {
+    gains.forEach((g) => g.connect(comp));
+    comp.connect(limiter);
+    limiter.connect(ctx.destination);
+  } else {
+    gains.forEach((g) => g.connect(ctx.destination));
+  }
+}
+
+function updateLoudnessTarget() {
+  const levels = state.library.map((v) => v.loudness).filter((l) => l != null).sort((a, b) => a - b);
+  loudnessTarget = levels.length ? levels[Math.floor(levels.length / 2)] : null;
+}
+
+/** Correction in dB for a video (0 when off or not measured yet). */
+function videoGainDb(videoId) {
+  const v = state.library.find((x) => x.id === videoId);
+  if (!levelAudio || !v || v.loudness == null || loudnessTarget == null) return 0;
+  return clamp(loudnessTarget - v.loudness, GAIN_MIN_DB, GAIN_MAX_DB);
+}
+
+function playerVideoId(p) {
+  return Number((p.dataset.src || '').split('/').pop()) || null;
+}
+
+function applyVolume() {
+  const volume = Number(ui.volume.value);
+  const db = videoGainDb(playerVideoId(players[active]));
+  ui.levelBtn.classList.toggle('on', levelAudio);
+  ui.levelBtn.title = levelAudio
+    ? t('Udjævn lydstyrke mellem videoer (denne video {db} dB)', { db: `${db >= 0 ? '+' : ''}${Math.round(db)}` })
+    : t('Udjævn lydstyrke mellem videoer');
+  if (!audio) {
+    players.forEach((p) => { p.volume = volume; });
+    return;
+  }
+  players.forEach((p, i) => {
+    const gain = volume * 10 ** (videoGainDb(playerVideoId(p)) / 20);
+    audio.gains[i].gain.setTargetAtTime(gain, audio.ctx.currentTime, 0.05);
+  });
+}
+
+function toggleLevelAudio() {
+  levelAudio = !levelAudio;
+  saveJson('levelAudio', levelAudio);
+  routeAudio();
+  applyVolume();
+}
+
+/** Show progress while the server measures loudness, then pick up the new values. */
+async function watchAudioMeasuring() {
+  const hint = ui.scanStatus.textContent;
+  let shown = false;
+  for (;;) {
+    let status;
+    try { status = await api('/api/audio/status'); } catch { return; }
+    if (!status.running) break;
+    shown = true;
+    if (!ui.scanBtn.disabled) {
+      ui.scanStatus.textContent = t('Måler lydniveau {a}/{b}…', { a: status.done, b: status.total });
+    }
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  if (shown) {
+    if (!ui.scanBtn.disabled) ui.scanStatus.textContent = hint;
+    await loadLibrary();
+  }
 }
 
 // ------------------------------------------------------------------ fullscreen
@@ -1596,7 +1710,8 @@ ui.prevBtn.addEventListener('click', () => {
   if (clip && state.sessionTime - clip.offsetMs > 3000) goToClip(state.clipIndex, 0);
   else goToClip(state.clipIndex - 1);
 });
-ui.volume.addEventListener('input', () => { players[active].volume = Number(ui.volume.value); });
+ui.volume.addEventListener('input', applyVolume);
+ui.levelBtn.addEventListener('click', toggleLevelAudio);
 ui.timelineCanvas.addEventListener('click', (e) => {
   if (!state.session) return;
   const rect = ui.timelineCanvas.getBoundingClientRect();
@@ -1648,6 +1763,8 @@ window.addEventListener('resize', () => { envelope = null; });
     await loadSettings();
     await Promise.all([loadLibrary(), loadSessions()]);
     offerResume();
+    watchAudioMeasuring();
+    applyVolume();
     api('/api/remux/status').then((s) => { if (s.running) pollRemux(); }).catch(() => {});
   } catch (err) {
     ui.scanStatus.textContent = t('Kan ikke nå serveren: {msg}', { msg: err.message });

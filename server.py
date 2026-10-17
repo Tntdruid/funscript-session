@@ -71,6 +71,25 @@ def run_scan(folder=None):
         LIBRARY.scan(folder)
     except Exception as exc:  # reported through /api/scan/status
         LIBRARY.scan_state = {"running": False, "done": 0, "total": 0, "message": "", "error": str(exc)}
+        return
+    start_audio_measuring()
+
+
+AUDIO_LOCK = threading.Lock()
+
+
+def start_audio_measuring():
+    """Measure loudness of new/changed videos in the background (one job at a time)."""
+    def job():
+        if not AUDIO_LOCK.acquire(blocking=False):
+            return
+        try:
+            LIBRARY.measure_audio_all()
+        except Exception as exc:  # never take the server down for this
+            print(f"Lydmåling fejlede: {exc}")
+        finally:
+            AUDIO_LOCK.release()
+    threading.Thread(target=job, daemon=True).start()
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -89,6 +108,8 @@ class Handler(SimpleHTTPRequestHandler):
                                    "exportPath": str(LIBRARY.export_folder())})
         if path == "/api/library":
             return self.send_json({"folder": LIBRARY.library_folder(), "videos": LIBRARY.videos()})
+        if path == "/api/audio/status":
+            return self.send_json(LIBRARY.audio_state)
         if path == "/api/scan/status":
             return self.send_json(LIBRARY.scan_state)
         if path == "/api/sessions":
@@ -422,6 +443,7 @@ if __name__ == "__main__":
             print(f"Gemte {written} session(er) som .funscript i {LIBRARY.export_folder()}")
     except OSError as exc:
         print(f"Kunne ikke gemme sessioner som filer: {exc}")
+    start_audio_measuring()
     httpd = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"Funscript Session Player kører på http://{HOST}:{PORT}")
     httpd.serve_forever()

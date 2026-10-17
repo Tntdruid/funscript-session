@@ -180,6 +180,11 @@ const EN = {
   'Sessionen er for lang til Handy (maks ca. 512 KB script)': 'The session is too long for the Handy (max about 512 KB of script)',
   'Upload af script til Handy fejlede': 'Uploading the script to Handy failed',
 
+  // ---- audio levelling
+  'Udjævn lydstyrke mellem videoer': 'Even out volume between videos',
+  'Udjævn lydstyrke mellem videoer (denne video {db} dB)': 'Even out volume between videos (this video {db} dB)',
+  'Måler lydniveau {a}/{b}…': 'Measuring volume {a}/{b}…',
+
   // ---- build similar
   '🔁 Byg lignende': '🔁 Build similar',
   'Byg en ny session med samme indstillinger, men andre klip': 'Build a new session with the same settings but other clips',

@@ -77,6 +77,11 @@ og længde (helst en video, der ikke allerede er med – tryk igen for et nyt fo
 Træk et klip for at flytte det. Slag- og vib-scriptet bygges om med sessionens indstillinger, og
 de gemte filer i `sessions\` opdateres.
 
+**Ens lydstyrke:** Serveren måler lydniveauet for hver video i baggrunden (ffmpeg, 4 prøver á 20 sek;
+ca. 5 min for 330 videoer første gang, derefter kun nye/ændrede). Under afspilning skrues hver video
+op/ned mod bibliotekets median (højst +18/−15 dB), med en blid kompressor og en limiter mod
+forvrængning. Knappen ≋ ved lydstyrken slår det til/fra; tooltip viser korrektionen for videoen.
+
 **Fortsæt hvor du slap:** Positionen gemmes i databasen hvert 5. sek under afspilning og ved pause.
 Næste gang appen åbnes, tilbydes "Fortsæt … fra 7:32". Færdigspillede sessioner tilbydes ikke.
 

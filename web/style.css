@@ -245,6 +245,8 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .transport { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
 .transport #playBtn { width: 52px; }
 .transport #volume { width: 90px; }
+.level-btn { padding: 4px 9px; color: var(--muted); }
+.level-btn.on { border-color: var(--accent); color: var(--accent-2); }
 .tempo { margin-left: auto; display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; white-space: nowrap; }
 .tempo input { width: 90px; }
 .tempo span { color: var(--text); font-variant-numeric: tabular-nums; min-width: 36px; }

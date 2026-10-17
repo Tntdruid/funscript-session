@@ -45,7 +45,8 @@ CREATE TABLE IF NOT EXISTS videos (
     vib_path TEXT,
     vib2_path TEXT,
     meta TEXT,
-    issues TEXT
+    issues TEXT,
+    audio_db REAL
 );
 CREATE TABLE IF NOT EXISTS sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -304,6 +305,38 @@ def find_image(video_path):
     return None
 
 
+NO_AUDIO = -999.0  # stored when a video has no (audible) sound, so it isn't measured again
+
+
+def measure_loudness(path, duration_ms, points=(0.2, 0.4, 0.6, 0.8), seconds=20):
+    """Average loudness (mean volume, dB) of a video from a few short samples.
+
+    Uses ffmpeg's volumedetect on `seconds` of audio at each point; the file is only read.
+    Returns NO_AUDIO for silent or audio-less videos, None if ffmpeg can't be used."""
+    if not _FFMPEG:
+        return None
+    if not duration_ms or duration_ms < seconds * 1000 * 3:
+        points = (0.0,)
+    levels = []
+    for f in points:
+        start = duration_ms / 1000 * f if duration_ms else 0
+        cmd = [_FFMPEG, "-nostdin", "-hide_banner", "-ss", f"{start:.1f}", "-t", str(seconds),
+               "-i", str(path), "-vn", "-sn", "-dn", "-af", "volumedetect", "-f", "null", "-"]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120,
+                                    errors="replace",
+                                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        except (OSError, subprocess.SubprocessError):
+            continue
+        m = re.search(r"mean_volume:\s*(-?[\d.]+) dB", result.stderr)
+        if m and float(m.group(1)) > -60:  # ignore silent stretches
+            levels.append(float(m.group(1)))
+    if not levels:
+        return NO_AUDIO
+    power = sum(10 ** (level / 10) for level in levels) / len(levels)
+    return round(10 * math.log10(power), 1)
+
+
 def make_thumbnail(video_id, video_path, duration_ms=0):
     target = thumb_dir() / f"{int(video_id)}_{THUMB_HEIGHT}.jpg"
     if target.is_file():
@@ -502,7 +535,7 @@ class Library:
         columns = {r["name"] for r in self.conn.execute("PRAGMA table_info(videos)")}
         for column, kind in (("container", "TEXT"), ("rating", "INTEGER DEFAULT 0"),
                              ("vib_path", "TEXT"), ("vib2_path", "TEXT"), ("meta", "TEXT"),
-                             ("issues", "TEXT")):
+                             ("issues", "TEXT"), ("audio_db", "REAL")):
             if column not in columns:  # added after the first release
                 self.conn.execute(f"ALTER TABLE videos ADD COLUMN {column} {kind}")
         if "vib" not in {r["name"] for r in self.conn.execute("PRAGMA table_info(sessions)")}:
@@ -511,6 +544,7 @@ class Library:
         self.default_folder = str(default_folder)
         self.default_export = str(Path(db_path).resolve().parent / "sessions")
         self.scan_state = {"running": False, "done": 0, "total": 0, "message": ""}
+        self.audio_state = {"running": False, "done": 0, "total": 0}
         self.remux_state = {"running": False, "done": 0, "total": 0, "current": "",
                             "progress": 0.0, "failed": [], "error": ""}
 
@@ -605,6 +639,8 @@ class Library:
             vib_path=vib_paths[0], vib2_path=vib_paths[1], meta=meta,
             issues=json.dumps(check_script(actions, duration, speeds)),
         )
+        if not video_unchanged:
+            values["audio_db"] = None
         with self.lock, self.conn:
             if row:
                 sets = ", ".join(f"{k}=:{k}" for k in values)
@@ -663,6 +699,7 @@ class Library:
             "hasVib": bool(row["vib_path"]), "hasVib2": bool(row["vib2_path"]),
             **Library._meta_fields(row["meta"], row["name"]),
             "issues": json.loads(row["issues"] or "[]"),
+            "loudness": row["audio_db"] if row["audio_db"] is not None and row["audio_db"] > NO_AUDIO else None,
         }
 
     @staticmethod
@@ -686,6 +723,28 @@ class Library:
             except (OSError, ValueError):
                 result.append([])
         return tuple(result)
+
+    def measure_audio_all(self, workers=3):
+        """Measure the loudness of every playable video that hasn't been measured yet."""
+        from concurrent.futures import ThreadPoolExecutor
+        with self.lock:
+            rows = self.conn.execute(
+                "SELECT id, path, extension, duration_ms FROM videos WHERE audio_db IS NULL").fetchall()
+        todo = [r for r in rows if r["extension"] in BROWSER_PLAYABLE]
+        self.audio_state = {"running": True, "done": 0, "total": len(todo)}
+
+        def one(row):
+            level = measure_loudness(row["path"], row["duration_ms"] or 0)
+            if level is not None:
+                with self.lock, self.conn:
+                    self.conn.execute("UPDATE videos SET audio_db=? WHERE id=?", (level, row["id"]))
+            self.audio_state["done"] += 1
+
+        try:
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                list(pool.map(one, todo))
+        finally:
+            self.audio_state["running"] = False
 
     def set_rating(self, video_id, rating):
         """1 = favourite, -1 = never use in sessions, 0 = neutral."""
