@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="da">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Funscript Session</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand-row">
+          <div class="brand">Funscript <span>Session</span></div>
+          <div class="lang-switch" title="Sprog / Language">
+            <button data-lang="da">DA</button><button data-lang="en">EN</button>
+          </div>
+        </div>
+
+        <section class="card">
+          <h2>Bibliotek</h2>
+          <div class="inline">
+            <input id="libraryPath" type="text" placeholder="D:\Videoer" spellcheck="false" />
+            <button id="scanBtn">Scan</button>
+          </div>
+          <div class="hint" id="scanStatus">Videoer matches med scripts på filnavn (Video.mp4 → Video.funscript)</div>
+          <div class="remux hidden" id="remuxBox">
+            <button id="remuxBtn">Konverter MPEG-TS</button>
+            <div class="hint" id="remuxStatus"></div>
+            <div class="progress"><div id="remuxBar"></div></div>
+          </div>
+        </section>
+
+        <section class="card grow">
+          <div class="row-between">
+            <h2>Videoer <span class="count" id="libraryCount"></span></h2>
+            <label class="toggle"><input type="checkbox" id="selectAll" checked /> alle</label>
+          </div>
+          <button id="gridBtn" class="wide">⊞ Vis store billeder</button>
+          <input id="librarySearch" type="search" placeholder="Søg…" />
+          <ul class="library" id="libraryList"></ul>
+        </section>
+      </aside>
+
+      <main class="main">
+        <section class="stage">
+          <div class="video-wrap">
+            <video id="videoA" playsinline preload="auto"></video>
+            <video id="videoB" playsinline preload="auto" class="hidden"></video>
+            <div class="empty" id="emptyState">
+              <div class="empty-inner">
+                <div>Byg eller vælg en session for at starte</div>
+                <div class="resume" id="resumeBox" hidden>
+                  <div id="resumeText"></div>
+                  <div class="resume-buttons">
+                    <button id="resumeBtn" class="primary">▶ Fortsæt</button>
+                    <button id="resumeNo">Nej tak</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="fs-bar" id="fsBar">
+              <button id="fsPlay" title="Afspil / pause (mellemrum)">▶</button>
+              <button id="fsNext" title="Næste klip (N)">⏭</button>
+              <span class="fs-time" id="fsTime">0:00 / 0:00</span>
+              <div class="fs-progress" id="fsProgress" title="Klik for at spole"><div id="fsProgressFill"></div></div>
+              <span class="fs-clip" id="fsClip"></span>
+              <button id="fsExit" title="Afslut fuldskærm (F / Esc)">⤡</button>
+            </div>
+          </div>
+
+          <div class="transport">
+            <button id="prevBtn" title="Forrige klip">⏮</button>
+            <button id="playBtn" class="primary" title="Afspil / pause (mellemrum)">▶</button>
+            <button id="nextBtn" title="Næste klip">⏭</button>
+            <div class="clock"><span id="timeNow">0:00</span> / <span id="timeTotal">0:00</span></div>
+            <div class="clip-info" id="clipInfo">–</div>
+            <label class="tempo" title="Tempo for video og Handy ( [ og ] )">Tempo
+              <input id="rateSlider" type="range" min="0.5" max="1.5" step="0.05" value="1" />
+              <span id="rateLabel">100%</span>
+            </label>
+            <input id="volume" type="range" min="0" max="1" step="0.05" value="0.6" title="Lydstyrke" />
+            <button id="fullscreenBtn" title="Fuldskærm (F eller dobbeltklik på videoen)">⛶</button>
+          </div>
+
+          <canvas id="liveCanvas" height="90"></canvas>
+          <canvas id="timelineCanvas" height="70" title="Klik for at spole"></canvas>
+          <div class="session-strip" id="sessionStrip" hidden>
+            <div class="strip-head">
+              <span class="strip-title" id="sessionTitle"></span>
+              <input id="sessionTitleInput" type="text" maxlength="120" spellcheck="false" hidden />
+              <button id="renameBtn" title="Omdøb session">✎</button>
+              <span class="strip-meta" id="sessionMeta"></span>
+            </div>
+            <div class="strip" id="clipStrip"></div>
+          </div>
+        </section>
+
+        <div class="panels">
+          <section class="card">
+            <h2>Ny session</h2>
+            <label class="field">Længde
+              <div class="chips" id="lengthChips">
+                <button data-v="5">5 min</button><button data-v="10">10</button><button data-v="15" class="on">15</button><button data-v="20">20</button><button data-v="30">30</button>
+                <input id="customMinutes" type="number" min="1" max="240" placeholder="andet" />
+              </div>
+            </label>
+            <label class="field">Tid per video
+              <select id="clipLength">
+                <option value="">Auto (fordel ligeligt, min. 1 min)</option>
+                <option value="30">30 sek</option>
+                <option value="60">1 min</option>
+                <option value="90">1½ min</option>
+                <option value="120">2 min</option>
+                <option value="180">3 min</option>
+              </select>
+            </label>
+            <label class="field">Hastighed <span class="speed-label" id="speedLabel">auto</span>
+              <input id="speedSlider" type="range" min="0" max="450" step="10" value="0" />
+              <div class="chips small">
+                <button data-speed="0">Auto</button><button data-speed="120">Langsom</button><button data-speed="220">Medium</button><button data-speed="320">Hurtig</button>
+              </div>
+            </label>
+            <label class="field">Maks hastighed <span class="speed-label" id="maxSpeedLabel">ingen</span>
+              <input id="maxSpeedSlider" type="range" min="0" max="500" step="10" value="0" />
+            </label>
+            <label class="field">Kategorier <span class="speed-label" id="categoryLabel">alle</span>
+              <div class="chips small" id="categoryChips"></div>
+            </label>
+            <label class="toggle fav-toggle"><input type="checkbox" id="onlyFavs" /> Kun favoritter ★</label>
+            <label class="toggle fav-toggle" title="Fra = scriptet er 100% som dine filer, også ved klipskift">
+              <input type="checkbox" id="smooth" checked /> Glidende overgange mellem klip</label>
+            <label class="field">Vibration (Lovense m.fl.) <span class="speed-label" id="vibModeLabel"></span>
+              <select id="vibMode">
+                <option value="auto">Automatisk – kun når en vibrator er forbundet</option>
+                <option value="none">Ingen vibration (kun Handy/slag)</option>
+                <option value="derive">Brug .vib-script – afled af slag, hvor det mangler</option>
+                <option value="only">Kun videoer med .vib-script (100% original)</option>
+              </select>
+            </label>
+            <label class="field">Forløb
+              <div class="chips" id="curveChips">
+                <button data-v="constant" class="on">Konstant</button><button data-v="ramp">Opbygning</button><button data-v="waves">Bølger</button><button data-v="edging">Edging</button><button data-v="finale">Finale</button>
+              </div>
+            </label>
+            <button id="buildBtn" class="primary wide">Byg session</button>
+            <div class="hint" id="buildStatus"></div>
+          </section>
+
+          <section class="card">
+            <h2>Gemte sessioner</h2>
+            <ul class="sessions" id="sessionList"></ul>
+            <label class="field export-field">Gem scripts automatisk i
+              <div class="inline">
+                <input id="exportPath" type="text" spellcheck="false" />
+                <button id="exportBtn">Gem</button>
+              </div>
+            </label>
+            <div class="hint" id="exportStatus">Hver ny session gemmes her som .funscript</div>
+          </section>
+
+          <section class="card">
+            <h2>Enheder</h2>
+            <div class="row-between device-head">
+              <h3>Handy direkte</h3>
+              <span class="pill" id="deviceState">Ikke forbundet</span>
+            </div>
+            <div id="handyBox" class="device-box">
+              <input id="handyAppId" type="password" placeholder="Application ID" autocomplete="off" spellcheck="false" />
+              <div class="inline" style="margin-top: 8px">
+                <input id="handyKey" type="password" placeholder="Forbindelseskode" autocomplete="off" spellcheck="false" />
+                <button id="handyConnectBtn">Forbind</button>
+              </div>
+              <div class="hint">Firmware 4: Application ID får du gratis på
+                <a href="https://user.handyfeeling.com" target="_blank" rel="noopener">user.handyfeeling.com</a>,
+                forbindelseskoden står i Handy-appen. Scriptet uploades til Handys server og afspilles af Handy'en selv.</div>
+              <div class="temp-row">
+                <span>Motor</span><span class="temp" id="tempValue">– °C</span>
+                <span class="temp-status" id="tempStatus"></span>
+              </div>
+              <label class="field">Pause ved <span id="tempLimitLabel">70 °C</span>
+                <input id="tempLimit" type="range" min="50" max="74" step="1" value="70" />
+              </label>
+            </div>
+            <div class="row-between device-head">
+              <h3>Intiface – vibratorer m.fl.</h3>
+              <span class="pill" id="intifaceState">Ikke forbundet</span>
+            </div>
+            <div id="intifaceBox" class="device-box">
+              <div class="inline">
+                <input id="intifaceUrl" type="text" value="ws://127.0.0.1:12345" spellcheck="false" />
+                <button id="connectBtn">Forbind</button>
+              </div>
+              <ul class="bp-devices" id="bpDevices"></ul>
+              <div class="hint">Start Intiface Central, tænd legetøjet (fx Lovense Edge, Gush 2) og tryk Forbind.
+                Vibratorer følger sessionens .vib-script (motor 2 bruger .vib2, hvis det findes).
+                Kan køre samtidig med Handy'en.</div>
+              <label class="field">Vib-styrke <span id="vibStrengthLabel">100%</span>
+                <input id="vibStrength" type="range" min="0" max="100" step="5" value="100" />
+              </label>
+            </div>
+            <h3 class="device-common">Fælles</h3>
+            <label class="field">Forsinkelse <span id="offsetLabel">0 ms</span>
+              <input id="offsetSlider" type="range" min="-300" max="300" step="10" value="0" />
+            </label>
+            <label class="field">Slag-område <span id="rangeLabel">0 – 100</span>
+              <div class="inline">
+                <input id="rangeMin" type="range" min="0" max="100" value="0" />
+                <input id="rangeMax" type="range" min="0" max="100" value="100" />
+              </div>
+            </label>
+          </section>
+        </div>
+      </main>
+    </div>
+    <div class="grid-overlay hidden" id="gridOverlay" role="dialog" aria-label="Vælg videoer">
+      <div class="grid-head">
+        <h2>Vælg videoer <span class="count" id="gridCount"></span></h2>
+        <input id="gridSearch" type="search" placeholder="Søg titel, skuespiller, genre…" spellcheck="false" />
+        <select id="gridGenre" title="Genre"><option value="">Alle genrer</option></select>
+        <select id="gridSort" title="Sortering">
+          <option value="name">Navn</option>
+          <option value="rating">Favoritter først</option>
+          <option value="speed-asc">Langsomst først</option>
+          <option value="speed-desc">Hurtigst først</option>
+          <option value="duration">Længst først</option>
+          <option value="played">Mindst afspillet</option>
+          <option value="issues">Med problemer først</option>
+        </select>
+        <label class="toggle"><input type="checkbox" id="gridAll" checked /> vælg alle</label>
+        <label class="toggle"><input type="checkbox" id="gridUsableOnly" checked /> skjul uden script</label>
+        <button id="gridClose" class="primary">Færdig</button>
+      </div>
+      <div class="chips small grid-cats" id="gridCategories"></div>
+      <div class="grid" id="gridList"></div>
+      <div class="grid-hint">Klik på et billede for at vælge/fravælge det til sessioner · ★ = favorit · 👎 = brug aldrig · Esc lukker</div>
+    </div>
+    <script src="i18n.js"></script>
+    <script src="handy.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

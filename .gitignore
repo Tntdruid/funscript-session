@@ -1,0 +1,13 @@
+# Personal data – never in the repository
+funscript.db
+funscript.db-*
+*.db-journal
+sessions/
+videos/
+
+# Python
+__pycache__/
+*.pyc
+
+# Local editor / tool settings
+.claude/
