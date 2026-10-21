@@ -180,6 +180,12 @@ const EN = {
   'Sessionen er for lang til Handy (maks ca. 512 KB script)': 'The session is too long for the Handy (max about 512 KB of script)',
   'Upload af script til Handy fejlede': 'Uploading the script to Handy failed',
 
+  // ---- warm-up
+  'Opvarmning (kun video)': 'Warm-up (video only)',
+  'Kun video – Handy og vibratorer står stille, før sessionen starter': 'Video only – the Handy and vibrators stay still before the session starts',
+  'Opvarmning – Handy står stille · {time} tilbage': 'Warm-up – Handy is still · {time} left',
+  'Opvarmning': 'Warm-up',
+
   // ---- audio levelling
   'Udjævn lydstyrke mellem videoer': 'Even out volume between videos',
   'Udjævn lydstyrke mellem videoer (denne video {db} dB)': 'Even out volume between videos (this video {db} dB)',

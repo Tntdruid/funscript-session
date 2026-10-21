@@ -241,6 +241,7 @@ class Handler(SimpleHTTPRequestHandler):
                 "maxSpeed": p.get("maxSpeed"), "smooth": p.get("smooth", True),
                 "vibMode": p.get("vibMode", "derive"), "videoIds": p.get("videoIds"),
                 "seed": data.get("seed"), "avoid": session["clips"],
+                "warmupMinutes": (p.get("warmupMs") or 0) / 60000,
             })
 
         if path == "/api/resume":
@@ -340,6 +341,7 @@ class Handler(SimpleHTTPRequestHandler):
                 vib_mode=data.get("vibMode") if data.get("vibMode") in ("only", "none") else "derive",
                 lang=self.lang(),
                 avoid=data.get("avoid"),
+                warmup_ms=min(10.0, max(0.0, float(data.get("warmupMinutes") or 0))) * 60000,
             )
         except (KeyError, ValueError, TypeError) as exc:
             return self.send_json({"error": str(exc)}, 400)

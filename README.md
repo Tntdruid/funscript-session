@@ -69,6 +69,11 @@ hastighed og længde. Det aktive klip er markeret; klik for at springe til et kl
 omdøbes med ✎ (eller dobbeltklik på navnet) – også fra listen over gemte sessioner. De gemte
 filer i `sessions\` får samme nye navn.
 
+**Opvarmning:** "Opvarmning (kun video)" (0–10 min) lægger rolige klip før sessionen, hvor
+Handy'en holder stille og vibratorer er slukket; derefter glider den ind i sessionen. Nedtællingen
+vises ved afspilleren, og opvarmningen er markeret blå på tidslinjen. Den bevares ved redigering
+og "Byg lignende".
+
 **Byg lignende:** "🔁 Byg lignende" (ved sessionens navn eller i listen) laver en ny session med
 præcis samme indstillinger og videoudvalg, men nye klip – den forrige sessions stykker undgås.
 
@@ -126,6 +131,5 @@ følger det valgte sprog.
 - `server.py` – HTTP-server, API og video-streaming (med Range/seek)
 - `funlib.py` – scanning, analyse, database og session-bygger
 - `web/` – frontend (vanilla HTML/CSS/JS)
-- `legacy/` – den gamle prototype (åbnes på `/legacy/index.html`)
 
 Miljøvariabler: `FUNSCRIPT_DB` (sti til database), `FUNSCRIPT_PORT` (standard 8000).

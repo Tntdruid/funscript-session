@@ -246,6 +246,9 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .transport #playBtn { width: 52px; }
 .transport #volume { width: 90px; }
 .level-btn { padding: 4px 9px; color: var(--muted); }
+.warmup-info { font-size: 12px; white-space: nowrap; padding: 2px 8px; border-radius: 99px; background: #23324a; color: #9cc3ff; }
+.warmup-info[hidden] { display: none; }
+.clip-card .warm-badge { position: absolute; bottom: 62px; left: 6px; font-size: 11px; padding: 0 6px; border-radius: 6px; background: #23324a; color: #9cc3ff; }
 .level-btn.on { border-color: var(--accent); color: var(--accent-2); }
 .tempo { margin-left: auto; display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; white-space: nowrap; }
 .tempo input { width: 90px; }

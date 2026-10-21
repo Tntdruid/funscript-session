@@ -1062,11 +1062,10 @@ def rebuild_session(session, clips, scripts, vib_scripts):
         offset += end - start
     if callable(scripts):
         scripts = {vid: scripts(vid) for vid in {c["videoId"] for c in laid}}
-    smooth = params.get("smooth", True) is not False
-    actions = assemble_script(laid, scripts, bridge_ms=BRIDGE_MS if smooth else 0)
-    if params.get("maxSpeed"):
-        actions = limit_speed(actions, float(params["maxSpeed"]))
-    vib, vib2 = ([], []) if params.get("vibMode") == "none" else assemble_vib(laid, scripts, vib_scripts)
+    actions, vib, vib2 = build_tracks(
+        laid, scripts, params.get("smooth", True) is not False,
+        float(params["maxSpeed"]) if params.get("maxSpeed") else None,
+        params.get("vibMode", "derive"), vib_scripts)
     return {**session, "clips": laid, "actions": actions, "vib": vib, "vib2": vib2,
             "totalMs": offset}
 
@@ -1121,8 +1120,11 @@ def _same_content(v):
 
 def build_session(videos, total_ms, clip_ms=None, curve="constant", target=None,
                   seed=None, scripts=None, max_speed=None, smooth=True,
-                  vib_scripts=None, vib_mode="derive", lang="da", avoid=None):
+                  vib_scripts=None, vib_mode="derive", lang="da", avoid=None, warmup_ms=0):
     """Pick clips from `videos` so they add up to `total_ms` at a matching speed.
+
+    `warmup_ms` adds a warm-up before the session: calm video clips while the device stays
+    still (no script); the session itself starts after it.
 
     `scripts` maps video id -> [(at, pos)] (or is a function that loads them) and is used
     to assemble the combined script. `max_speed` (u/s) avoids faster parts and caps every
@@ -1165,14 +1167,26 @@ def build_session(videos, total_ms, clip_ms=None, curve="constant", target=None,
             used[same_content(by_id[clip["videoId"]])].append((clip["startMs"], clip["endMs"]))
     clips = []
     elapsed = 0
-    while total_ms - elapsed > 1000 and len(clips) < 500:
-        remaining = total_ms - elapsed
-        length = min(clip_ms, remaining)
-        if remaining - length < min_clip:
-            length = remaining
-        clip_target = target * CURVES[curve]((elapsed + length / 2) / total_ms)
-        if max_speed:
-            clip_target = min(clip_target, max_speed * 0.9)
+    warmup_ms = int(max(0, warmup_ms or 0))
+
+    def fill(until, warmup):
+        nonlocal elapsed
+        span_start = elapsed
+        while until - elapsed > 1000 and len(clips) < 500:
+            remaining = until - elapsed
+            length = min(clip_ms, remaining)
+            if remaining - length < min(min_clip, until - span_start):
+                length = remaining
+            if warmup:  # calm-looking clips; the device doesn't move anyway
+                clip_target = target * 0.6
+            else:
+                clip_target = target * CURVES[curve]((elapsed - warmup_ms + length / 2) / total_ms)
+            if max_speed:
+                clip_target = min(clip_target, max_speed * 0.9)
+            pick(length, clip_target, warmup)
+
+    def pick(length, clip_target, warmup):
+        nonlocal elapsed
 
         best = None
         for v in eligible:
@@ -1193,32 +1207,72 @@ def build_session(videos, total_ms, clip_ms=None, curve="constant", target=None,
             "videoId": v["id"], "name": v["name"],
             "startMs": int(start), "endMs": int(end), "offsetMs": int(elapsed),
             "speed": round(avg, 1), "targetSpeed": round(clip_target, 1),
+            **({"warmup": True} if warmup else {}),
         })
         usage[same_content(v)] += 1
         used[same_content(v)].append((start, end))
         elapsed += int(end - start)
 
+    fill(warmup_ms, warmup=True)
+    fill(warmup_ms + total_ms, warmup=False)
+
     if callable(scripts):  # load only the scripts the session actually uses
         scripts = {vid: scripts(vid) for vid in {c["videoId"] for c in clips}}
-    actions = assemble_script(clips, scripts or {}, bridge_ms=BRIDGE_MS if smooth else 0)
-    if max_speed:
-        actions = limit_speed(actions, max_speed)
-    # "none": stroke-only session (eg. just a Handy) - no vibration tracks or .vib files
-    vib, vib2 = ([], []) if vib_mode == "none" else assemble_vib(clips, scripts or {}, vib_scripts)
+    actions, vib, vib2 = build_tracks(clips, scripts or {}, smooth, max_speed, vib_mode, vib_scripts)
     mins = round(total_ms / 60000)
+    warm_label = ""
+    if warmup_ms:
+        warm_min = round(warmup_ms / 60000)
+        warm_label = f" · +{warm_min} min {'warm-up' if lang == 'en' else 'opvarmning'}"
     return {
         "name": f"{mins} min · {(CURVE_LABELS_EN if lang == 'en' else CURVE_LABELS)[curve]}"
                 f" · {round(target)} u/s"
-                + (f" · {'max' if lang == 'en' else 'maks'} {round(max_speed)}" if max_speed else ""),
+                + (f" · {'max' if lang == 'en' else 'maks'} {round(max_speed)}" if max_speed else "")
+                + warm_label,
         "totalMs": int(elapsed),
         "params": {"minutes": total_ms / 60000, "clipMs": clip_ms, "curve": curve,
                    "targetSpeed": round(target, 1), "seed": seed, "maxSpeed": max_speed,
-                   "smooth": bool(smooth), "vibMode": vib_mode},
+                   "smooth": bool(smooth), "vibMode": vib_mode, "warmupMs": warmup_ms},
         "vib": vib,
         "vib2": vib2,
         "clips": clips,
         "actions": actions,
     }
+
+
+def build_tracks(clips, scripts, smooth, max_speed, vib_mode, vib_loader):
+    """Stroke and vibration tracks for laid-out clips. Warm-up clips get no motion:
+    the stroke track holds still and vibration stays off while they play."""
+    active = [c for c in clips if not c.get("warmup")]
+    still = [(c["offsetMs"], c["offsetMs"] + c["endMs"] - c["startMs"]) for c in clips if c.get("warmup")]
+    actions = assemble_script(active, scripts, bridge_ms=BRIDGE_MS if smooth else 0)
+    if max_speed:
+        actions = limit_speed(actions, max_speed)
+    actions = _hold_still(actions, still)
+    # "none": stroke-only session (eg. just a Handy) - no vibration tracks or .vib files
+    vib, vib2 = ([], []) if vib_mode == "none" else assemble_vib(active, scripts, vib_loader)
+    vib = _hold_still(vib, still, level=0) if vib else vib
+    vib2 = _hold_still(vib2, still, level=0) if vib2 else vib2
+    return actions, vib, vib2
+
+
+def _hold_still(actions, spans, level=None):
+    """No motion during `spans`: hold the position the track has at the start of each span
+    (or a fixed `level`, eg. 0 for vibration)."""
+    out = [dict(a) for a in actions]
+    for start, end in spans:
+        points = [(a["at"], a["pos"]) for a in out]
+        pos = level if level is not None else (interpolate(points, start) if points else 50)
+        out = [a for a in out if not start < a["at"] < end]
+        hold_end = end - 1 if level is not None else end  # vibration switches on right at the end
+        out += [{"at": int(start), "pos": int(pos)}, {"at": int(hold_end), "pos": int(pos)}]
+    out.sort(key=lambda a: a["at"])
+    deduped = []
+    for a in out:
+        if deduped and deduped[-1]["at"] == a["at"]:
+            continue
+        deduped.append(a)
+    return deduped
 
 
 def assemble_vib(clips, strokes, vib_loader):

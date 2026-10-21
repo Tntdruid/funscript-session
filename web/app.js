@@ -22,6 +22,7 @@ const ui = {
   categoryChips: $('categoryChips'), categoryLabel: $('categoryLabel'),
   rateSlider: $('rateSlider'), rateLabel: $('rateLabel'),
   tempValue: $('tempValue'), tempStatus: $('tempStatus'), tempLimit: $('tempLimit'), tempLimitLabel: $('tempLimitLabel'),
+  warmupSlider: $('warmupSlider'), warmupLabel: $('warmupLabel'), warmupInfo: $('warmupInfo'),
   maxSpeedSlider: $('maxSpeedSlider'), maxSpeedLabel: $('maxSpeedLabel'), onlyFavs: $('onlyFavs'),
   smooth: $('smooth'),
 };
@@ -630,6 +631,7 @@ async function buildSession() {
         clipSeconds: Number(ui.clipLength.value) || null,
         targetSpeed: Number(ui.speedSlider.value) || null,
         maxSpeed: Number(ui.maxSpeedSlider.value) || null,
+        warmupMinutes: Number(ui.warmupSlider.value) || 0,
         smooth: ui.smooth.checked,
         vibMode: effectiveVibMode(),
         curve: state.curve,
@@ -873,7 +875,7 @@ function renderClipStrip() {
     card.className = 'clip-card';
     card.title = `${v?.title || clip.name}\n${t('{range} i videoen', { range: `${fmtTime(clip.startMs)}–${fmtTime(clip.endMs)}` })}`;
     card.innerHTML = `
-      <span class="num">${i + 1}</span>
+      <span class="num">${i + 1}</span>${clip.warmup ? `<span class="warm-badge">${t('Opvarmning')}</span>` : ''}
       <img loading="lazy" alt="" src="/thumb/${clip.videoId}?h=420" />
       <div class="ctext">
         <div class="ct">${escapeHtml(v?.title || clip.name)}</div>
@@ -1230,8 +1232,22 @@ function tick() {
   }
 }
 
+/** End of the warm-up (ms into the session), 0 when the session has none. */
+function warmupEnd(session = state.session) {
+  return (session?.clips || []).filter((c) => c.warmup)
+    .reduce((end, c) => Math.max(end, c.offsetMs + c.endMs - c.startMs), 0);
+}
+
+function updateWarmupInfo() {
+  const end = warmupEnd();
+  const left = end - state.sessionTime;
+  ui.warmupInfo.hidden = !(left > 0);
+  if (left > 0) ui.warmupInfo.textContent = t('Opvarmning – Handy står stille · {time} tilbage', { time: fmtTime(left) });
+}
+
 function frame() {
   ui.timeNow.textContent = fmtTime(state.sessionTime);
+  updateWarmupInfo();
   if (document.fullscreenElement === videoWrap) updateFullscreenBar();
   drawLive();
   drawTimeline();
@@ -1338,6 +1354,12 @@ function drawTimeline() {
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillRect(x0, 0, dpr, h);
   });
+
+  const warmEnd = warmupEnd();
+  if (warmEnd) {
+    ctx.fillStyle = 'rgba(80, 130, 220, 0.25)';
+    ctx.fillRect(0, 0, (warmEnd / totalMs) * w, h);
+  }
 
   const pad = 4 * dpr;
   ctx.fillStyle = 'rgba(255,255,255,0.55)';
@@ -1644,6 +1666,13 @@ document.querySelectorAll('[data-speed]').forEach((b) => b.addEventListener('cli
   updateSpeedLabel();
 }));
 ui.speedSlider.addEventListener('input', updateSpeedLabel);
+ui.warmupSlider.value = loadJson('warmupMinutes', 0);
+const showWarmupLabel = () => {
+  const m = Number(ui.warmupSlider.value);
+  ui.warmupLabel.textContent = m ? `${m} min` : t('ingen');
+};
+showWarmupLabel();
+ui.warmupSlider.addEventListener('input', () => { showWarmupLabel(); saveJson('warmupMinutes', Number(ui.warmupSlider.value)); });
 ui.maxSpeedSlider.addEventListener('input', () => {
   const v = Number(ui.maxSpeedSlider.value);
   ui.maxSpeedLabel.textContent = v ? `${v} u/s` : t('ingen');
