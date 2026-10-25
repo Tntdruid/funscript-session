@@ -981,17 +981,30 @@ def _edging(f):
     return 0.6 + 0.75 * cycle / 0.82 if cycle < 0.82 else 0.45
 
 
+def _journey(f):
+    """Build-up -> waves -> edging -> finale in one session."""
+    if f < 0.25:                                  # build-up: 60% -> 100%
+        return 0.6 + 0.4 * f / 0.25
+    if f < 0.5:                                   # one wave around 100%
+        return 1.0 + 0.25 * math.sin(2 * math.pi * (f - 0.25) / 0.25)
+    if f < 0.8:                                   # two edges: climb to 125%, then a calm break
+        cycle = ((f - 0.5) / 0.3 * 2) % 1
+        return 0.7 + 0.55 * cycle / 0.75 if cycle < 0.75 else 0.45
+    return 1.45                                   # finale
+
+
 CURVES = {
     "constant": lambda f: 1.0,
     "ramp": lambda f: 0.65 + 0.6 * f,                          # build-up: 65% -> 125%
     "waves": lambda f: 1.0 + 0.3 * math.sin(2 * math.pi * 3 * f),  # three waves
     "edging": _edging,
     "finale": lambda f: 0.85 if f < 0.8 else 1.45,             # calm, then a fast last 20%
+    "journey": lambda f: _journey(f),                         # all of the above, one after another
 }
 CURVE_LABELS = {"constant": "Konstant", "ramp": "Opbygning", "waves": "Bølger",
-                "edging": "Edging", "finale": "Finale"}
+                "edging": "Edging", "finale": "Finale", "journey": "Hele turen"}
 CURVE_LABELS_EN = {"constant": "Constant", "ramp": "Build-up", "waves": "Waves",
-                   "edging": "Edging", "finale": "Finale"}
+                   "edging": "Edging", "finale": "Finale", "journey": "Full journey"}
 
 
 def _quality_penalty(window):

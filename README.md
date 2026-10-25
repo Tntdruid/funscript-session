@@ -113,7 +113,8 @@ det til/fra sessioner. ★/👎 kan sættes direkte på kortet. Esc lukker.
 sessionen overstiger den. Bemærk at tempo over 100% gør slagene hurtigere igen.
 
 **Forløb:** Konstant, Opbygning, Bølger, Edging (tre opbygninger med pauser) og Finale (roligt,
-så et hurtigt sidste stykke).
+så et hurtigt sidste stykke), samt Hele turen (Opbygning → Bølger → Edging → Finale i én session:
+25% / 25% / 30% / 20%). Kortere tid per video giver blødere kurver.
 
 Genveje: mellemrum = afspil/pause, ←/→ = 10 sek, N = næste klip, F = fuldskærm, `[`/`]` = tempo.
 Klik på videoen = afspil/pause, dobbeltklik = fuldskærm. I fuldskærm vises en kontrollinje,

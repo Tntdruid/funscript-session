@@ -55,6 +55,8 @@ const EN = {
   'Bølger': 'Waves',
   'Edging': 'Edging',
   'Finale': 'Finale',
+  'Hele turen': 'Full journey',
+  'Opbygning → Bølger → Edging → Finale': 'Build-up → Waves → Edging → Finale',
   'Byg session': 'Build session',
   'Gemte sessioner': 'Saved sessions',
   'Gem scripts automatisk i': 'Save scripts automatically to',
