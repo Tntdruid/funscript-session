@@ -24,6 +24,10 @@ ellers bruges længden af scriptet.
    (konstant, opbygning eller bølger). For hvert klip findes det stykke i hver video
    hvis hastighed ligger tættest på målet (og er mest stabilt). Videoer der afviger mere
    end ±30% bruges kun hvis intet andet passer.
+   Valget er også "naturligt": klip starter og slutter ved et vendepunkt i slaget eller en pause
+   (højst ±2,5 sek flyttet), næste klip starter helst i samme position som det forrige sluttede,
+   slaglængden ligner det forrige klip, en video i samme kategori eller med fælles genre/skuespiller
+   foretrækkes som opfølger, og intro/rulletekster (første og sidste 4%) undgås.
 3. Klippene lægges efter hinanden og der samles ét funscript for hele sessionen, som gemmes
    i databasen og kan downloades som `.funscript`.
 4. Afspilleren skifter sømløst mellem klip (næste klip forudindlæses) og styrer en enhed via
