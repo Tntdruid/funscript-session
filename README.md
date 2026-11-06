@@ -73,6 +73,15 @@ hastighed og længde. Det aktive klip er markeret; klik for at springe til et kl
 omdøbes med ✎ (eller dobbeltklik på navnet) – også fra listen over gemte sessioner. De gemte
 filer i `sessions\` får samme nye navn.
 
+**Live-styring:** Under afspilning vælger ▲ (eller pil op) hurtigere og ▼ (pil ned) roligere
+kommende klip (±15% per tryk), og ⏹ erstatter resten med ca. 2 min finale. Klippet, der spiller
+nu, fortsætter uforstyrret; Handy'en får det nye script i baggrunden. Ændringen gemmes i sessionen.
+
+**Lærer hvad du kan lide:** Klip du ser færdige tæller positivt; klip du springer over (⏭ før
+halvvejs), bytter eller fjerner tæller negativt. Sessioner foretrækker derefter de videoer du kan
+lide (♥ i gitteret, sortér "Mest kunne lide") og undgår de stykker du sprang over. Det vejer mindre
+end ★, nyere handlinger tæller mest, og "Glem det lærte" i gitteret nulstiller.
+
 **Opvarmning:** "Opvarmning (kun video)" (0–10 min) lægger rolige klip før sessionen, hvor
 Handy'en holder stille og vibratorer er slukket; derefter glider den ind i sessionen. Nedtællingen
 vises ved afspilleren, og opvarmningen er markeret blå på tidslinjen. Den bevares ved redigering

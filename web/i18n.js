@@ -182,6 +182,17 @@ const EN = {
   'Sessionen er for lang til Handy (maks ca. 512 KB script)': 'The session is too long for the Handy (max about 512 KB of script)',
   'Upload af script til Handy fejlede': 'Uploading the script to Handy failed',
 
+  // ---- live steering, learning
+  'Roligere kommende klip (↓)': 'Calmer upcoming clips (↓)',
+  'Hurtigere kommende klip (↑)': 'Faster upcoming clips (↑)',
+  'Afslut nu med en kort finale': 'Finish now with a short finale',
+  'Vælger nye klip…': 'Picking new clips…',
+  'Mest kunne lide (lært)': 'Liked most (learned)',
+  'Glem det lærte': 'Forget what was learned',
+  'Glem hvad appen har lært om, hvad du kan lide': 'Forget what the app has learned about what you like',
+  'Glem alt hvad appen har lært om, hvad du kan lide?': 'Forget everything the app has learned about what you like?',
+  'Lært: du ser den ofte færdig': 'Learned: you often watch it to the end',
+
   // ---- warm-up
   'Opvarmning (kun video)': 'Warm-up (video only)',
   'Kun video – Handy og vibratorer står stille, før sessionen starter': 'Video only – the Handy and vibrators stay still before the session starts',

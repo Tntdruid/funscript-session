@@ -9,7 +9,8 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlparse
 
-from funlib import Library, remux_dir, build_session, session_funscript, rebuild_session, find_replacement
+from funlib import (Library, remux_dir, build_session, session_funscript, rebuild_session,
+                    find_replacement, steer_session)
 
 ROOT = Path(__file__).resolve().parent
 WEB = ROOT / "web"
@@ -38,6 +39,9 @@ MESSAGES_EN = {
     "Ingen af de valgte videoer har et .vib-script": "None of the chosen videos has a .vib script",
     "Ingen afspillelige videoer med funscript i biblioteket": "No playable videos with a funscript in the library",
     "ffmpeg blev ikke fundet i PATH": "ffmpeg was not found in PATH",
+    "Ukendt feedback": "Unknown feedback",
+    "Ugyldig feedback": "Invalid feedback",
+    "Ugyldig styring": "Invalid steering",
 }
 
 
@@ -253,6 +257,30 @@ class Handler(SimpleHTTPRequestHandler):
                 LIBRARY.set_setting("resume", "null")
             return self.send_json({"ok": True})
 
+        if path == "/api/feedback":  # learning: watched to the end / skipped / swapped / removed
+            try:
+                LIBRARY.add_feedback(data["videoId"], data.get("startMs", 0), data.get("endMs", 0),
+                                     data.get("kind"))
+            except (KeyError, TypeError, ValueError) as exc:
+                return self.send_json({"error": str(exc) or "Ugyldig feedback"}, 400)
+            return self.send_json({"ok": True})
+        if path == "/api/feedback/reset":
+            LIBRARY.reset_taste()
+            return self.send_json({"ok": True})
+
+        m = re.fullmatch(r"/api/sessions/(\d+)/steer", path)
+        if m:  # live steering: re-pick the clips after the one playing now
+            session = LIBRARY.session(int(m.group(1)))
+            if not session:
+                return self.send_error(404)
+            try:
+                rebuilt = steer_session(session, int(data.get("fromIndex", -1)), LIBRARY.videos(),
+                                        data.get("mode"), LIBRARY.script_actions, LIBRARY.vib_actions,
+                                        data.get("seed"), LIBRARY.taste())
+            except (KeyError, TypeError, ValueError) as exc:
+                return self.send_json({"error": str(exc) or "Ugyldig styring"}, 400)
+            return self.send_json(LIBRARY.update_session(rebuilt))
+
         m = re.fullmatch(r"/api/sessions/(\d+)/(edit|swap)", path)
         if m:
             session = LIBRARY.session(int(m.group(1)))
@@ -267,7 +295,8 @@ class Handler(SimpleHTTPRequestHandler):
                     wanted = {int(i) for i in data.get("videoIds") or []}
                     pool = [v for v in videos.values() if not wanted or v["id"] in wanted]
                     clips = list(session["clips"])
-                    clips[index] = find_replacement(pool, session, index, data.get("seed"))
+                    clips[index] = find_replacement(pool, session, index, data.get("seed"),
+                                                    LIBRARY.script_actions, LIBRARY.taste())
                 else:  # edit: new order / removed clips, each must be a real part of a video
                     clips = []
                     for c in data.get("clips") or []:
@@ -342,6 +371,7 @@ class Handler(SimpleHTTPRequestHandler):
                 lang=self.lang(),
                 avoid=data.get("avoid"),
                 warmup_ms=min(10.0, max(0.0, float(data.get("warmupMinutes") or 0))) * 60000,
+                taste=LIBRARY.taste(),
             )
         except (KeyError, ValueError, TypeError) as exc:
             return self.send_json({"error": str(exc)}, 400)

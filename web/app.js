@@ -8,7 +8,7 @@ const ui = {
   remuxBox: $('remuxBox'), remuxBtn: $('remuxBtn'), remuxStatus: $('remuxStatus'), remuxBar: $('remuxBar'),
   emptyState: $('emptyState'), playBtn: $('playBtn'), prevBtn: $('prevBtn'), nextBtn: $('nextBtn'),
   timeNow: $('timeNow'), timeTotal: $('timeTotal'), clipInfo: $('clipInfo'), volume: $('volume'),
-  levelBtn: $('levelBtn'),
+  levelBtn: $('levelBtn'), moreBtn: $('moreBtn'), lessBtn: $('lessBtn'), finishBtn: $('finishBtn'),
   liveCanvas: $('liveCanvas'), timelineCanvas: $('timelineCanvas'),
   lengthChips: $('lengthChips'), customMinutes: $('customMinutes'), clipLength: $('clipLength'),
   speedSlider: $('speedSlider'), speedLabel: $('speedLabel'), curveChips: $('curveChips'),
@@ -301,6 +301,7 @@ const GRID_SORTS = {
   duration: (a, b) => b.durationMs - a.durationMs,
   played: (a, b) => a.playCount - b.playCount || a.name.localeCompare(b.name, 'da'),
   issues: (a, b) => (b.issues?.length || 0) - (a.issues?.length || 0) || a.name.localeCompare(b.name, 'da'),
+  taste: (a, b) => (b.taste || 0) - (a.taste || 0) || a.name.localeCompare(b.name, 'da'),
 };
 
 function searchText(v) {
@@ -372,7 +373,7 @@ function makeGridCard(v) {
     <div class="cinfo">
       <div class="cname">${escapeHtml(v.title)}</div>
       <div class="cpeople">${escapeHtml([v.actors.slice(0, 2).join(', '), v.year].filter(Boolean).join(' · '))}</div>
-      <div class="cmeta"><span>${info}</span>${issueBadge(v)}${v.hasVib ? `<span class="vib-badge">vib${v.hasVib2 ? '×2' : ''}</span>` : ''}<span>${escapeHtml(t(v.category))}</span></div>
+      <div class="cmeta"><span>${info}</span>${v.taste > 0.3 ? `<span class="liked" title="${t('Lært: du ser den ofte færdig')}">♥</span>` : ''}${issueBadge(v)}${v.hasVib ? `<span class="vib-badge">vib${v.hasVib2 ? '×2' : ''}</span>` : ''}<span>${escapeHtml(t(v.category))}</span></div>
       <div class="spark-wrap"><canvas data-id="${v.id}"></canvas><span class="spark-pos" hidden></span></div>
     </div>`;
   card.querySelector('img').addEventListener('error', (e) => e.target.classList.add('missing'));
@@ -690,6 +691,8 @@ async function loadSessions() {
 // ------------------------------------------------------------------ playback
 
 async function openSession(session, startIndex = 0, resume = false) {
+  watched = {};
+  lastWatchTime = null;
   setPlaying(false);
   const sameSession = state.session?.id === session.id;
   state.session = session;
@@ -952,6 +955,7 @@ function clipList() {
 }
 
 function swapClip(i) {
+  sendFeedback(state.session.clips[i], 'swap');
   editSession('swap', { index: i, videoIds: selectedIds(), seed: Math.floor(Math.random() * 1e9) }, i);
 }
 
@@ -961,6 +965,7 @@ function removeClip(i) {
     strip.meta.textContent = t('En session skal have mindst ét klip');
     return;
   }
+  sendFeedback(clips[i], 'remove');
   clips.splice(i, 1);
   editSession('edit', { clips }, Math.min(i, clips.length - 1));
 }
@@ -1173,6 +1178,81 @@ async function watchAudioMeasuring() {
   }
 }
 
+// ------------------------------------------------------------------ live steering + learning
+
+let steering = false;
+let watched = {};        // clip index -> ms actually played (seeks don't count)
+let lastWatchTime = null;
+
+/** Count real playing time per clip; used to tell "watched to the end" from "skipped". */
+function trackWatching() {
+  if (!state.playing || switching || state.clipIndex < 0) { lastWatchTime = null; return; }
+  if (lastWatchTime !== null) {
+    const step = state.sessionTime - lastWatchTime;
+    if (step > 0 && step < 1500) watched[state.clipIndex] = (watched[state.clipIndex] || 0) + step;
+  }
+  lastWatchTime = state.sessionTime;
+}
+
+function sendFeedback(clip, kind) {
+  if (!clip || clip.warmup) return;
+  api('/api/feedback', {
+    method: 'POST', body: { videoId: clip.videoId, startMs: clip.startMs, endMs: clip.endMs, kind },
+  }).catch(() => {});
+}
+
+function clipShare(i) {
+  const clip = state.session?.clips[i];
+  return clip ? (watched[i] || 0) / Math.max(1, clip.endMs - clip.startMs) : 0;
+}
+
+/** ⏭ by hand: leaving a clip before half of it played counts as "skipped". */
+function nextClip() {
+  const i = state.clipIndex;
+  if (state.session && i >= 0 && clipShare(i) < 0.5) sendFeedback(state.session.clips[i], 'skip');
+  goToClip(i + 1);
+}
+
+/** ▲ / ▼ / ⏹: re-pick the clips after the one playing now, without stopping. */
+async function steer(mode) {
+  if (!state.session || steering || state.clipIndex < 0) return;
+  steering = true;
+  [ui.moreBtn, ui.lessBtn, ui.finishBtn].forEach((b) => { b.disabled = true; });
+  const from = state.clipIndex;
+  strip.meta.textContent = t('Vælger nye klip…');
+  try {
+    const updated = await api(`/api/sessions/${state.session.id}/steer`, {
+      method: 'POST', body: { fromIndex: from, mode, seed: Math.floor(Math.random() * 1e9) },
+    });
+    state.session = updated;
+    preload = null;
+    envelope = null;
+    Object.keys(watched).forEach((k) => { if (Number(k) > from) delete watched[k]; });
+    ui.timeTotal.textContent = fmtTime(updated.totalMs);
+    renderClipStrip();
+    updateClipInfo();
+    loadSessions();
+    if (state.clipIndex > from) {
+      goToClip(state.clipIndex, 0); // already moved on into a clip that was replaced
+    } else {
+      preloadNext();
+      if (state.playing) handySync(); // the device gets the new script, same position
+    }
+  } catch (err) {
+    strip.meta.textContent = err.message;
+  } finally {
+    steering = false;
+    [ui.moreBtn, ui.lessBtn, ui.finishBtn].forEach((b) => { b.disabled = false; });
+  }
+}
+
+async function forgetTaste() {
+  if (!confirm(t('Glem alt hvad appen har lært om, hvad du kan lide?'))) return;
+  await api('/api/feedback/reset', { method: 'POST', body: {} });
+  await loadLibrary();
+  renderGrid();
+}
+
 // ------------------------------------------------------------------ fullscreen
 
 const videoWrap = document.querySelector('.video-wrap');
@@ -1217,7 +1297,9 @@ function tick() {
     const clipLen = clip.endMs - clip.startMs;
     if (!switching) {
       state.sessionTime = clip.offsetMs + clamp(videoMs - clip.startMs, 0, clipLen);
+      trackWatching();
       if (state.playing && (videoMs >= clip.endMs - 30 || el.ended)) {
+        if (clipShare(state.clipIndex) >= 0.7) sendFeedback(clip, 'complete');
         if (state.clipIndex + 1 < clips.length) {
           goToClip(state.clipIndex + 1);
         } else {
@@ -1710,7 +1792,7 @@ ui.playBtn.addEventListener('click', togglePlay);
 $('fullscreenBtn').addEventListener('click', toggleFullscreen);
 fs.exit.addEventListener('click', toggleFullscreen);
 fs.play.addEventListener('click', togglePlay);
-fs.next.addEventListener('click', () => goToClip(state.clipIndex + 1));
+fs.next.addEventListener('click', nextClip);
 fs.progress.addEventListener('click', (e) => {
   if (!state.session) return;
   const rect = fs.progress.getBoundingClientRect();
@@ -1733,7 +1815,11 @@ document.addEventListener('fullscreenchange', () => {
   if (document.fullscreenElement === videoWrap) showFullscreenUi();
   else videoWrap.classList.remove('show-ui');
 });
-ui.nextBtn.addEventListener('click', () => goToClip(state.clipIndex + 1));
+ui.nextBtn.addEventListener('click', nextClip);
+ui.moreBtn.addEventListener('click', () => steer('more'));
+ui.lessBtn.addEventListener('click', () => steer('less'));
+ui.finishBtn.addEventListener('click', () => steer('finish'));
+$('forgetBtn').addEventListener('click', forgetTaste);
 ui.prevBtn.addEventListener('click', () => {
   const clip = state.session?.clips[state.clipIndex];
   if (clip && state.sessionTime - clip.offsetMs > 3000) goToClip(state.clipIndex, 0);
@@ -1771,7 +1857,9 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
   if (e.code === 'ArrowRight') seekSession(state.sessionTime + 10000);
   if (e.code === 'ArrowLeft') seekSession(state.sessionTime - 10000);
-  if (e.code === 'KeyN') goToClip(state.clipIndex + 1);
+  if (e.code === 'KeyN') nextClip();
+  if (e.code === 'ArrowUp') { e.preventDefault(); steer('more'); }
+  if (e.code === 'ArrowDown') { e.preventDefault(); steer('less'); }
   if (e.code === 'KeyF') toggleFullscreen();
   if (e.code === 'BracketLeft') setRate(state.rate - 0.05, true);
   if (e.code === 'BracketRight') setRate(state.rate + 0.05, true);

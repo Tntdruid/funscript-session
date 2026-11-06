@@ -72,6 +72,11 @@
             <button id="prevBtn" title="Forrige klip">⏮</button>
             <button id="playBtn" class="primary" title="Afspil / pause (mellemrum)">▶</button>
             <button id="nextBtn" title="Næste klip">⏭</button>
+            <span class="steer">
+              <button id="lessBtn" title="Roligere kommende klip (↓)">▼</button>
+              <button id="moreBtn" title="Hurtigere kommende klip (↑)">▲</button>
+              <button id="finishBtn" title="Afslut nu med en kort finale">⏹</button>
+            </span>
             <div class="clock"><span id="timeNow">0:00</span> / <span id="timeTotal">0:00</span></div>
             <div class="clip-info" id="clipInfo">–</div>
             <div class="warmup-info" id="warmupInfo" hidden></div>
@@ -231,9 +236,11 @@
           <option value="duration">Længst først</option>
           <option value="played">Mindst afspillet</option>
           <option value="issues">Med problemer først</option>
+          <option value="taste">Mest kunne lide (lært)</option>
         </select>
         <label class="toggle"><input type="checkbox" id="gridAll" checked /> vælg alle</label>
         <label class="toggle"><input type="checkbox" id="gridUsableOnly" checked /> skjul uden script</label>
+        <button id="forgetBtn" title="Glem hvad appen har lært om, hvad du kan lide">Glem det lærte</button>
         <button id="gridClose" class="primary">Færdig</button>
       </div>
       <div class="chips small grid-cats" id="gridCategories"></div>

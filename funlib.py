@@ -49,6 +49,15 @@ CREATE TABLE IF NOT EXISTS videos (
     audio_db REAL,
     amps TEXT
 );
+CREATE TABLE IF NOT EXISTS feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    video_id INTEGER NOT NULL,
+    start_ms INTEGER,
+    end_ms INTEGER,
+    kind TEXT NOT NULL,
+    score REAL NOT NULL,
+    at REAL NOT NULL
+);
 CREATE TABLE IF NOT EXISTS sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -676,6 +685,9 @@ class Library:
             rows = self.conn.execute("SELECT * FROM videos ORDER BY name COLLATE NOCASE").fetchall()
         root = Path(self.library_folder())
         videos = [self._with_category(self._video_dict(r), root) for r in rows]
+        taste = self.taste()
+        for v in videos:
+            v["taste"] = round(taste.get(v["id"], {}).get("score", 0.0), 2)
         # A top-level folder holding a single video is that video's own folder, not a category.
         sizes = {}
         for v in videos:
@@ -765,6 +777,39 @@ class Library:
                 list(pool.map(one, todo))
         finally:
             self.audio_state["running"] = False
+
+    # learning from what the user does
+    FEEDBACK_SCORES = {"complete": 1.0, "skip": -1.0, "swap": -1.0, "remove": -1.5}
+
+    def add_feedback(self, video_id, start_ms, end_ms, kind):
+        score = self.FEEDBACK_SCORES.get(kind)
+        if score is None:
+            raise ValueError("Ukendt feedback")
+        with self.lock, self.conn:
+            self.conn.execute(
+                "INSERT INTO feedback(video_id, start_ms, end_ms, kind, score, at) "
+                "VALUES(?, ?, ?, ?, ?, ?)",
+                (int(video_id), int(start_ms), int(end_ms), kind, score, time.time()))
+
+    def taste(self):
+        """What the user seems to like, per video: score -1..1 (watched to the end vs skipped,
+        swapped or removed; recent events count most) and the parts to avoid."""
+        with self.lock:
+            rows = self.conn.execute(
+                "SELECT video_id, start_ms, end_ms, score, at FROM feedback").fetchall()
+        now = time.time()
+        totals, avoid = {}, {}
+        for r in rows:
+            weight = 0.5 ** ((now - r["at"]) / (90 * 86400))  # half weight after ~3 months
+            totals[r["video_id"]] = totals.get(r["video_id"], 0.0) + r["score"] * weight
+            if r["score"] < 0 and r["end_ms"] and r["end_ms"] > r["start_ms"]:
+                avoid.setdefault(r["video_id"], []).append((r["start_ms"], r["end_ms"]))
+        return {vid: {"score": max(-1.0, min(1.0, total / 5)), "avoid": avoid.get(vid, [])}
+                for vid, total in totals.items()} |                {vid: {"score": 0.0, "avoid": parts} for vid, parts in avoid.items() if vid not in totals}
+
+    def reset_taste(self):
+        with self.lock, self.conn:
+            self.conn.execute("DELETE FROM feedback")
 
     def set_rating(self, video_id, rating):
         """1 = favourite, -1 = never use in sessions, 0 = neutral."""
@@ -1154,47 +1199,24 @@ def rebuild_session(session, clips, scripts, vib_scripts):
             "totalMs": offset}
 
 
-def find_replacement(videos, session, index, seed=None):
+def find_replacement(videos, session, index, seed=None, scripts=None, taste=None):
     """Another clip of the same length and similar speed to replace clip `index`, preferably
     from a video that isn't in the session yet. Never returns the clip it replaces."""
-    clip = session["clips"][index]
+    clips = session["clips"]
+    clip = clips[index]
     params = session.get("params", {})
-    length = clip["endMs"] - clip["startMs"]
-    target = clip.get("targetSpeed") or clip["speed"] or 100.0
     max_speed = float(params["maxSpeed"]) if params.get("maxSpeed") else None
-    eligible = [v for v in videos if v["hasScript"] and v["playable"] and v["durationMs"] > 0
-                and v.get("rating", 0) >= 0]
-    if params.get("vibMode") == "only":
-        eligible = [v for v in eligible if v.get("hasVib")]
-    by_id = {v["id"]: v for v in videos}
-    in_session = {_same_content(by_id[c["videoId"]]) for c in session["clips"] if c["videoId"] in by_id}
-    used = {}
-    for c in session["clips"]:
-        if c["videoId"] in by_id:
-            used.setdefault(_same_content(by_id[c["videoId"]]), []).append((c["startMs"], c["endMs"]))
-
-    rng = random.Random(seed)
-    best = None
-    for v in eligible:
-        key = _same_content(v)
-        start, end, avg, score = _best_window(v, length, target, used.get(key, []), max_speed)
-        if v["id"] == clip["videoId"] and start == clip["startMs"]:
-            continue
-        if abs(avg - target) / target > SPEED_TOLERANCE:
-            score += 2.0
-        if key in in_session:
-            score += 0.5                                      # prefer something new
-        if v.get("rating", 0) > 0:
-            score -= 0.12
-        score += rng.random() * 0.25                          # a different pick each time
-        if best is None or score < best[0]:
-            best = (score, v, start, end, avg)
-    if not best:
-        raise ValueError("Fandt ikke noget klip at bytte med")
-    _, v, start, end, avg = best
-    return {"videoId": v["id"], "name": v["name"], "startMs": int(start), "endMs": int(end),
-            "speed": round(avg, 1), "targetSpeed": round(target, 1)}
-
+    picker = ClipPicker(eligible_videos(videos, params.get("vibMode", "derive")),
+                        scripts or {}, max_speed, seed, taste)
+    for c in clips:
+        picker.mark_used(c)
+    picker.usage = {k: n * 3 for k, n in picker.usage.items()}  # really prefer something new
+    target = clip.get("targetSpeed") or clip["speed"] or 100.0
+    prev = clips[index - 1] if index > 0 else None
+    new = picker.pick(clip["endMs"] - clip["startMs"], target, prev,
+                      keep_end=index == len(clips) - 1, warmup=bool(clip.get("warmup")))
+    new.pop("endPos", None)
+    return new
 
 def _same_content(v):
     """Versions of the same video (eg. "TV" and "Side by Side") share an identical script;
@@ -1202,9 +1224,110 @@ def _same_content(v):
     return (round(v["avgSpeed"]), v["actionCount"], round(v["durationMs"] / 10000))
 
 
+def _related(a, b):
+    """Same category, or a shared genre/actor: makes the next clip feel like a follow-up."""
+    if a.get("category") and a.get("category") == b.get("category"):
+        return True
+    shared = {x.lower() for x in a.get("genres", []) + a.get("actors", [])} & \
+             {x.lower() for x in b.get("genres", []) + b.get("actors", [])} - {"handy"}
+    return bool(shared)
+
+
+def eligible_videos(videos, vib_mode="derive"):
+    eligible = [v for v in videos if v["hasScript"] and v["playable"] and v["durationMs"] > 0
+                and v.get("rating", 0) >= 0]
+    if vib_mode == "only":
+        eligible = [v for v in eligible if v.get("hasVib")]
+        if not eligible:
+            raise ValueError("Ingen af de valgte videoer har et .vib-script")
+    if not eligible:
+        raise ValueError("Ingen afspillelige videoer med funscript i biblioteket")
+    return eligible
+
+
+class ClipPicker:
+    """Chooses clips one at a time: matching speed, similar stroke length, natural cut points,
+    a related follow-up, and what the user has shown to like (`taste`). Used to build
+    sessions and to re-pick the upcoming clips while one plays (live steering).
+
+    `taste` maps video id -> {"score": -1..1, "avoid": [(start, end), ...]}: liked videos get
+    a bonus, and parts the user skipped or swapped away count as already used."""
+
+    def __init__(self, eligible, scripts, max_speed=None, seed=None, taste=None):
+        self.eligible = eligible
+        self.by_id = {v["id"]: v for v in eligible}
+        self.scripts = scripts
+        self.max_speed = max_speed
+        self.rng = random.Random(seed)
+        self.taste = taste or {}
+        self.usage, self.used, self.cache = {}, {}, {}
+        for vid, info in self.taste.items():
+            if vid in self.by_id:
+                self.used.setdefault(_same_content(self.by_id[vid]), []).extend(info.get("avoid", []))
+
+    def actions_of(self, video_id):
+        if video_id not in self.cache:
+            self.cache[video_id] = (self.scripts(video_id) if callable(self.scripts)
+                                    else (self.scripts or {}).get(video_id, []))
+        return self.cache[video_id]
+
+    def mark_used(self, clip, count=True):
+        v = self.by_id.get(clip["videoId"])
+        if not v:
+            return
+        key = _same_content(v)
+        self.used.setdefault(key, []).append((clip["startMs"], clip["endMs"]))
+        if count:
+            self.usage[key] = self.usage.get(key, 0) + 1
+
+    def pick(self, length, target, prev=None, keep_end=False, warmup=False):
+        prev_video = self.by_id.get(prev["videoId"]) if prev else None
+        prev_amp = prev.get("amp") if prev else None
+        prev_pos = None
+        if prev:
+            prev_pos = prev.get("endPos")
+            if prev_pos is None:
+                prev_pos = interpolate(self.actions_of(prev["videoId"]), prev["endMs"])
+
+        best = None
+        for v in self.eligible:
+            key = _same_content(v)
+            start, end, avg, score = _best_window(v, length, target, self.used.get(key, []),
+                                                  self.max_speed, prev_amp)
+            if abs(avg - target) / target > SPEED_TOLERANCE:
+                score += 2.0                                  # only if nothing else fits
+            if v.get("rating", 0) > 0:
+                score -= 0.12                                 # favourites first
+            score -= 0.05 * self.taste.get(v["id"], {}).get("score", 0)  # learned: softer than ★
+            if prev_video is not None and v["id"] != prev_video["id"] and _related(v, prev_video):
+                score -= 0.05                                 # a natural follow-up
+            score += 0.15 * self.usage.get(key, 0)            # spread over many videos
+            score += 0.02 * min(v["playCount"], 10)           # favour less-played videos
+            score += self.rng.random() * 0.08                 # variety between builds
+            if best is None or score < best[0]:
+                best = (score, v, start, end, avg)
+
+        _, v, start, end, avg = best
+        actions = self.actions_of(v["id"])
+        start, end = snap_clip(actions, start, end, v["durationMs"], prefer_pos=prev_pos,
+                               keep_end=keep_end)
+        w0, w1 = start // WINDOW_MS, max(start // WINDOW_MS + 1, end // WINDOW_MS)
+        clip = {
+            "videoId": v["id"], "name": v["name"],
+            "startMs": int(start), "endMs": int(end), "offsetMs": 0,
+            "speed": round(avg, 1), "targetSpeed": round(target, 1),
+            **({"warmup": True} if warmup else {}),
+            "amp": round(_mean_amp((v.get("amps") or [])[w0:w1]), 1),
+            "endPos": interpolate(actions, end),
+        }
+        self.mark_used(clip)
+        return clip
+
+
 def build_session(videos, total_ms, clip_ms=None, curve="constant", target=None,
                   seed=None, scripts=None, max_speed=None, smooth=True,
-                  vib_scripts=None, vib_mode="derive", lang="da", avoid=None, warmup_ms=0):
+                  vib_scripts=None, vib_mode="derive", lang="da", avoid=None, warmup_ms=0,
+                  taste=None):
     """Pick clips from `videos` so they add up to `total_ms` at a matching speed.
 
     `warmup_ms` adds a warm-up before the session: calm video clips while the device stays
@@ -1214,14 +1337,7 @@ def build_session(videos, total_ms, clip_ms=None, curve="constant", target=None,
     to assemble the combined script. `max_speed` (u/s) avoids faster parts and caps every
     stroke in the combined script. Videos rated -1 are never used, +1 are preferred.
     """
-    eligible = [v for v in videos if v["hasScript"] and v["playable"] and v["durationMs"] > 0
-                and v.get("rating", 0) >= 0]
-    if vib_mode == "only":
-        eligible = [v for v in eligible if v.get("hasVib")]
-        if not eligible:
-            raise ValueError("Ingen af de valgte videoer har et .vib-script")
-    if not eligible:
-        raise ValueError("Ingen afspillelige videoer med funscript i biblioteket")
+    eligible = eligible_videos(videos, vib_mode)
     if curve not in CURVES:
         curve = "constant"
     max_speed = float(max_speed) if max_speed else None
@@ -1238,31 +1354,18 @@ def build_session(videos, total_ms, clip_ms=None, curve="constant", target=None,
     min_clip = min(MIN_CLIP_MS, total_ms)
     clip_ms = int(max(min_clip, min(clip_ms, total_ms)))
 
-    rng = random.Random(seed)
-
-    same_content = _same_content
-
-    usage = {same_content(v): 0 for v in eligible}
-    used = {same_content(v): [] for v in eligible}
+    picker = ClipPicker(eligible, scripts, max_speed, seed, taste)
     # "build similar": treat the previous session's clips as already used, so new parts are picked
-    by_id = {v["id"]: v for v in eligible}
     for clip in avoid or []:
-        if clip["videoId"] in by_id:
-            used[same_content(by_id[clip["videoId"]])].append((clip["startMs"], clip["endMs"]))
+        picker.mark_used(clip, count=False)
+
     clips = []
     elapsed = 0
     warmup_ms = int(max(0, warmup_ms or 0))
 
-    span_end = [0]
-
-    def until_left(length):
-        """The last clip of a span keeps its exact end, so the session length stays right."""
-        return span_end[0] - elapsed if span_end[0] - elapsed <= length else float("inf")
-
     def fill(until, warmup):
         nonlocal elapsed
         span_start = elapsed
-        span_end[0] = until
         while until - elapsed > 1000 and len(clips) < 500:
             remaining = until - elapsed
             length = min(clip_ms, remaining)
@@ -1274,68 +1377,17 @@ def build_session(videos, total_ms, clip_ms=None, curve="constant", target=None,
                 clip_target = target * CURVES[curve]((elapsed - warmup_ms + length / 2) / total_ms)
             if max_speed:
                 clip_target = min(clip_target, max_speed * 0.9)
-            pick(length, clip_target, warmup)
-
-    script_cache = {}
-
-    def actions_of(video_id):
-        if video_id not in script_cache:
-            script_cache[video_id] = (scripts(video_id) if callable(scripts)
-                                      else (scripts or {}).get(video_id, []))
-        return script_cache[video_id]
-
-    def related(a, b):
-        """Same category, or a shared genre/actor: makes the next clip feel like a follow-up."""
-        if a.get("category") and a.get("category") == b.get("category"):
-            return True
-        shared = {x.lower() for x in a.get("genres", []) + a.get("actors", [])} & \
-                 {x.lower() for x in b.get("genres", []) + b.get("actors", [])} - {"handy"}
-        return bool(shared)
-
-    def pick(length, clip_target, warmup):
-        nonlocal elapsed
-        prev = clips[-1] if clips else None
-        prev_video = by_id.get(prev["videoId"]) if prev else None
-
-        best = None
-        for v in eligible:
-            key = same_content(v)
-            start, end, avg, score = _best_window(v, length, clip_target, used[key], max_speed,
-                                                  prev.get("amp") if prev else None)
-            if abs(avg - clip_target) / clip_target > SPEED_TOLERANCE:
-                score += 2.0                                  # only if nothing else fits
-            if v.get("rating", 0) > 0:
-                score -= 0.12                                 # favourites first
-            if prev_video is not None and v["id"] != prev_video["id"] and related(v, prev_video):
-                score -= 0.05                                 # a natural follow-up
-            score += 0.15 * usage[key]                        # spread over many videos
-            score += 0.02 * min(v["playCount"], 10)           # favour less-played videos
-            score += rng.random() * 0.08                      # variety between builds
-            if best is None or score < best[0]:
-                best = (score, v, start, end, avg)
-
-        _, v, start, end, avg = best
-        actions = actions_of(v["id"])
-        start, end = snap_clip(actions, start, end, v["durationMs"],
-                               prefer_pos=prev.get("endPos") if prev else None,
-                               keep_end=(end - start) >= until_left(length))
-        w0, w1 = start // WINDOW_MS, max(start // WINDOW_MS + 1, end // WINDOW_MS)
-        amp = _mean_amp((v.get("amps") or [])[w0:w1])
-        clips.append({
-            "videoId": v["id"], "name": v["name"],
-            "startMs": int(start), "endMs": int(end), "offsetMs": int(elapsed),
-            "speed": round(avg, 1), "targetSpeed": round(clip_target, 1),
-            **({"warmup": True} if warmup else {}),
-            "amp": round(amp, 1), "endPos": interpolate(actions, end),
-        })
-        usage[same_content(v)] += 1
-        used[same_content(v)].append((start, end))
-        elapsed += int(end - start)
+            # the last clip of a span keeps its exact end, so the session length stays right
+            clip = picker.pick(length, clip_target, clips[-1] if clips else None,
+                               keep_end=length >= remaining, warmup=warmup)
+            clip["offsetMs"] = int(elapsed)
+            clips.append(clip)
+            elapsed += clip["endMs"] - clip["startMs"]
 
     fill(warmup_ms, warmup=True)
     fill(warmup_ms + total_ms, warmup=False)
 
-    scripts = {vid: actions_of(vid) for vid in {c["videoId"] for c in clips}}
+    scripts = {vid: picker.actions_of(vid) for vid in {c["videoId"] for c in clips}}
     for clip in clips:  # internal helpers, not part of the saved clip
         clip.pop("endPos", None)
     actions, vib, vib2 = build_tracks(clips, scripts, smooth, max_speed, vib_mode, vib_scripts)
@@ -1358,6 +1410,69 @@ def build_session(videos, total_ms, clip_ms=None, curve="constant", target=None,
         "clips": clips,
         "actions": actions,
     }
+
+
+STEER_FACTOR = 1.15     # ▲/▼ change the upcoming clips' speed by 15%
+FINISH_MS = 120000      # "finish now": about two minutes of finale
+
+
+def steer_session(session, from_index, videos, mode, scripts, vib_scripts, seed=None, taste=None):
+    """Re-pick the clips after `from_index` while that clip keeps playing.
+
+    mode "more"/"less": same lengths, 15% faster/slower. mode "finish": replace the rest
+    with a short finale. Clips up to and including `from_index` stay exactly as they are,
+    so playback continues without a jump."""
+    params = session.get("params", {})
+    clips = session["clips"]
+    if not 0 <= from_index < len(clips):
+        raise ValueError("Ugyldigt klip")
+    keep, rest = clips[:from_index + 1], clips[from_index + 1:]
+    max_speed = float(params["maxSpeed"]) if params.get("maxSpeed") else None
+    pool = videos
+    if params.get("videoIds"):
+        wanted = set(params["videoIds"])
+        pool = [v for v in videos if v["id"] in wanted] or videos
+    picker = ClipPicker(eligible_videos(pool, params.get("vibMode", "derive")),
+                        scripts, max_speed, seed, taste)
+    for clip in clips:
+        picker.mark_used(clip, count=clip in keep)
+
+    def capped(speed):
+        speed = max(30.0, speed)
+        return min(speed, max_speed * 0.9) if max_speed else speed
+
+    new = []
+    prev = keep[-1]
+    if mode == "finish":
+        rest_ms = sum(c["endMs"] - c["startMs"] for c in rest if not c.get("warmup"))
+        total = max(30000, min(FINISH_MS, rest_ms or FINISH_MS))
+        target = capped((params.get("targetSpeed") or prev.get("targetSpeed") or 200) * 1.45)
+        left = total
+        while left > 1000:
+            length = min(60000, left)
+            if left - length < MIN_CLIP_MS:
+                length = left
+            clip = picker.pick(length, target, prev, keep_end=length >= left)
+            new.append(clip)
+            left -= clip["endMs"] - clip["startMs"]
+            prev = clip
+    elif mode in ("more", "less"):
+        factor = STEER_FACTOR if mode == "more" else 1 / STEER_FACTOR
+        for old in rest:
+            if old.get("warmup"):  # the warm-up stays still, whatever the speed
+                new.append(old)
+                prev = old
+                continue
+            length = old["endMs"] - old["startMs"]
+            clip = picker.pick(length, capped(old.get("targetSpeed", old["speed"]) * factor), prev,
+                               keep_end=True)
+            new.append(clip)
+            prev = clip
+    else:
+        raise ValueError("Ugyldig styring")
+    for clip in new:
+        clip.pop("endPos", None)
+    return rebuild_session(session, keep + new, picker.actions_of, vib_scripts)
 
 
 def build_tracks(clips, scripts, smooth, max_speed, vib_mode, vib_loader):
