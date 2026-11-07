@@ -326,7 +326,8 @@ function renderGenreOptions() {
     if (key !== 'handy') counts.set(key, { name: g, n: (counts.get(key)?.n || 0) + 1 });
   }));
   const current = grid.genre.value;
-  const options = [...counts.values()].filter((g) => g.n > 1).sort((a, b) => b.n - a.n);
+  const options = [...counts.values()].filter((g) => g.n > 1)
+    .sort((a, b) => a.name.localeCompare(b.name, LANG, { sensitivity: 'base' }));
   grid.genre.innerHTML = `<option value="">${t('Alle genrer')}</option>`
     + options.map((g) => `<option value="${escapeHtml(g.name)}">${escapeHtml(g.name)} (${g.n})</option>`).join('');
   grid.genre.value = options.some((g) => g.name === current) ? current : '';
