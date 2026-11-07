@@ -182,6 +182,15 @@ const EN = {
   'Sessionen er for lang til Handy (maks ca. 512 KB script)': 'The session is too long for the Handy (max about 512 KB of script)',
   'Upload af script til Handy fejlede': 'Uploading the script to Handy failed',
 
+  // ---- tidier layout
+  'Flere indstillinger': 'More settings',
+  'Gem-mappe': 'Save folder',
+  'Justering': 'Adjustments',
+  'forsinkelse, slag-område': 'delay, stroke range',
+  'Vibratorer': 'Vibrators',
+  "Firmware 4: Application ID får du gratis på user.handyfeeling.com, forbindelseskoden står i Handy-appen. Scriptet uploades til Handys server og afspilles af Handy'en selv.":
+    "Firmware 4: get a free Application ID at user.handyfeeling.com; the connection key is in the Handy app. The script is uploaded to Handy's server and played by the Handy itself.",
+
   // ---- live steering, learning
   'Roligere kommende klip (↓)': 'Calmer upcoming clips (↓)',
   'Hurtigere kommende klip (↑)': 'Faster upcoming clips (↑)',

@@ -184,6 +184,7 @@ class Handler(SimpleHTTPRequestHandler):
         if path.startswith("/legacy/") or path == "/sample.funscript":
             return self.send_static(ROOT / path.lstrip("/"))
 
+        self.static_file = True  # app files: always check for a newer version (see end_headers)
         return super().do_GET()
 
     def do_POST(self):
@@ -460,6 +461,12 @@ class Handler(SimpleHTTPRequestHandler):
                     remaining -= len(chunk)
         except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
             pass  # browser cancelled the request (normal when seeking)
+
+    def end_headers(self):
+        # Without this the browser may keep using an old app.js/style.css after an update.
+        if getattr(self, "static_file", False):
+            self.send_header("Cache-Control", "no-cache")
+        super().end_headers()
 
     def log_message(self, format, *args):
         return

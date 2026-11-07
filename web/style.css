@@ -99,6 +99,35 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .library .rate button.nope.on { color: #ff8a8a; }
 .fav-toggle { margin: -4px 0 14px; }
 
+/* folded sections ("Flere indstillinger", "Gem-mappe", ...) */
+details.more { border-top: 1px solid var(--line); margin: 6px 0 2px; padding-top: 10px; }
+details.more > summary {
+  cursor: pointer; list-style: none; color: var(--muted); font-size: 12px; padding: 2px 0 10px;
+  display: flex; align-items: center; gap: 6px; user-select: none;
+}
+details.more > summary::-webkit-details-marker { display: none; }
+details.more > summary::before { content: '▸'; display: inline-block; transition: transform 0.15s; }
+details.more[open] > summary::before { transform: rotate(90deg); }
+details.more > summary:hover { color: var(--text); }
+.summary-value { margin-left: auto; color: var(--text); font-size: 12px; }
+details.more .toggle { margin: 4px 0 10px; }
+.build-btn { margin-top: 10px; }
+
+/* devices */
+.info { color: var(--muted); font-weight: 400; cursor: help; font-size: 13px; }
+.handy-creds { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+#handyBox.connected .handy-creds { display: none; }
+.temp-box[hidden], #vibStrengthField[hidden] { display: none; }
+.temp-box { margin-top: 4px; }
+
+/* saved sessions: actions show on hover, so the names get the room */
+.sessions li .s-actions { display: flex; gap: 4px; opacity: 0; transition: opacity 0.15s; }
+.sessions li:hover .s-actions, .sessions li:focus-within .s-actions { opacity: 1; }
+@media (hover: none) { .sessions li .s-actions { opacity: 1; } }
+
+/* clip info now sits under the session name */
+.session-strip .clip-info { margin: -2px 0 8px; }
+
 /* clips of the open session, under the player */
 .session-strip { margin-top: 12px; }
 .session-strip[hidden] { display: none; }

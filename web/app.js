@@ -666,11 +666,13 @@ async function loadSessions() {
         <div class="s-name">${escapeHtml(s.name)}</div>
         <div class="s-meta">${fmtTime(s.totalMs)} · ${s.clipCount} ${t('klip')} · ${date}${s.playCount ? ` · ${t('afspillet {n}×', { n: s.playCount })}` : ''}${s.file ? ` · <span class="saved" title="${escapeHtml(s.file)}">${t('✓ gemt')}</span>` : ''}</div>
       </div>
-      <a href="/api/sessions/${s.id}/funscript" title="${t('Download samlet .funscript')}">⬇</a>
-      ${s.hasVib ? `<a href="/api/sessions/${s.id}/funscript?track=vib" title="${t('Download vibrations-script (.vib.funscript)')}">vib</a>` : ''}
-      <button class="sim" title="${t('Byg en ny session med samme indstillinger, men andre klip')}">🔁</button>
-      <button class="ren" title="${t('Omdøb')}">✎</button>
-      <button class="del" title="${t('Slet')}">✕</button>`;
+      <div class="s-actions">
+        <a href="/api/sessions/${s.id}/funscript" title="${t('Download samlet .funscript')}">⬇</a>
+        ${s.hasVib ? `<a href="/api/sessions/${s.id}/funscript?track=vib" title="${t('Download vibrations-script (.vib.funscript)')}">vib</a>` : ''}
+        <button class="sim" title="${t('Byg en ny session med samme indstillinger, men andre klip')}">🔁</button>
+        <button class="ren" title="${t('Omdøb')}">✎</button>
+        <button class="del" title="${t('Slet')}">✕</button>
+      </div>`;
     li.querySelector('.s-main').addEventListener('click', async () => openSession(await api(`/api/sessions/${s.id}`)));
     li.querySelector('.sim').addEventListener('click', () => buildSimilar(s.id));
     li.querySelector('.ren').addEventListener('click', async () => {
@@ -1494,6 +1496,7 @@ function canStroke(d) {
 
 function renderBpDevices() {
   updateVibModeLabel();
+  $('vibStrengthField').hidden = !bpDevices.some((d) => !canStroke(d) && motorCount(d));
   ui.bpDevicesList.innerHTML = bpDevices.map((d) => {
     const what = canStroke(d) ? t('slag')
       : motorCount(d) > 1 ? t('vibration · {n} motorer', { n: motorCount(d) }) : motorCount(d) ? t('vibration') : t('ikke understøttet');
@@ -1596,9 +1599,15 @@ function stopDevice() {
 let handyToken = 0;
 let lastHandySync = 0;
 
+function showHandyConnected(on) {
+  $('handyBox').classList.toggle('connected', on);
+  $('tempBox').hidden = !on;
+}
+
 async function toggleHandy() {
   if (Handy.connected) {
     Handy.disconnect();
+    showHandyConnected(false);
     ui.handyConnectBtn.textContent = t('Forbind');
     setDeviceState(t('Ikke forbundet'));
     return;
@@ -1613,6 +1622,7 @@ async function toggleHandy() {
     } catch { /* ignore */ }
     ui.handyConnectBtn.textContent = t('Afbryd');
     setDeviceState(t('Handy forbundet'), true);
+    showHandyConnected(true);
     Handy.setRange(Number(ui.rangeMin.value), Number(ui.rangeMax.value)).catch(() => {});
     if (state.session) prepareHandy();
   } catch (err) {
@@ -1868,6 +1878,10 @@ window.addEventListener('resize', () => { envelope = null; });
 
 (async function init() {
   translatePage();
+  document.querySelectorAll('details[data-key]').forEach((d) => {
+    d.open = loadJson(d.dataset.key, false);
+    d.addEventListener('toggle', () => saveJson(d.dataset.key, d.open));
+  });
   document.querySelectorAll('[data-lang]').forEach((b) => {
     b.classList.toggle('on', b.dataset.lang === LANG);
     b.addEventListener('click', () => { if (b.dataset.lang !== LANG) setLanguage(b.dataset.lang); });
