@@ -1,0 +1,62 @@
+Stemme-coach: tekster til Home Assistant TTS (Christel)
+=========================================================
+
+Lav hver linje som en TTS-fil i Home Assistant (dansk, ChristelNeural).
+Filerne lander i \\10.10.1.33\config\tts, og appen finder dem selv ud fra
+teksten (store/små bogstaver og tegnsætning er ligegyldige).
+Tryk derefter "Hent stemmer" under Enheder -> Justering i appen.
+
+Start
+Så går vi i gang.
+Læn dig tilbage, nu begynder det.
+
+Opvarmning slut
+Opvarmningen er slut. Nu starter det.
+Nu er du varm. Så kører vi.
+
+Tempo op
+Lidt hurtigere nu.
+Tempoet stiger.
+Op i gear.
+
+Tempo ned
+Langsommere. Slap af.
+Ned i tempo.
+Rolig nu.
+
+Pause
+Hold en pause.
+Stop. Træk vejret.
+Hold igen. Ikke endnu.
+
+Udbrud (overraskelse)
+Overraskelse! Hurtigt nu!
+Fuld fart!
+
+Edge
+Op mod kanten.
+Tæt på. Hold den.
+
+Finale
+Finale! Giv slip.
+Sidste stræk. Nu!
+
+Sidste minut
+Sidste minut.
+Et minut tilbage.
+
+Knappen ▲ (mere)
+Hurtigere.
+Mere.
+
+Knappen ▼ (mindre)
+Roligere.
+Langsommere.
+
+Knappen ⏹ (afslut nu)
+Så slutter vi af.
+Finalen starter nu.
+
+Slut
+Godt klaret.
+Det var det. Godt gået.

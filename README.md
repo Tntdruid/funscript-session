@@ -83,6 +83,12 @@ klokke ved start/slut på opvarmning, sus op/ned ved temposkift, dyb tone ved pa
 udbrud, stigende tone ved edge, gong ved finale, to tik ved sidste minut og et blip ved ▲▼.
 Højst hvert 4. sek (vigtige 1,5 sek). Lydstyrke og 🔊 prøve under Enheder → Justering.
 
+**Stemme fra Home Assistant:** Under Justering → Signaler kan "Stemme (Home Assistant)" vælges.
+Lav teksterne i `stemme-tekster.txt` med HA's TTS (fx Christel); HA gemmer dem som mp3 med teksten
+som titel. Angiv HA's tts-mappe (fx `\<ha>\config	ts`) og tryk "Hent stemmer": appen læser
+titlerne, kopierer de matchende filer til sin cache (HA-mappen bliver kun læst) og bruger dem
+fremover. Tekster uden optagelse falder tilbage til lyd-signalet. Kun på dansk.
+
 **Live-styring:** Under afspilning vælger ▲ (eller pil op) hurtigere og ▼ (pil ned) roligere
 kommende klip (±15% per tryk), og ⏹ erstatter resten med ca. 2 min finale. Klippet, der spiller
 nu, fortsætter uforstyrret; Handy'en får det nye script i baggrunden. Ændringen gemmes i sessionen.

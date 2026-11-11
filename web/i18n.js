@@ -182,6 +182,17 @@ const EN = {
   'Sessionen er for lang til Handy (maks ca. 512 KB script)': 'The session is too long for the Handy (max about 512 KB of script)',
   'Upload af script til Handy fejlede': 'Uploading the script to Handy failed',
 
+  // ---- voice lines from Home Assistant
+  'Signaler': 'Cues',
+  'Lyde': 'Sounds',
+  'Stemme (Home Assistant)': 'Voice (Home Assistant)',
+  'Mappen hvor Home Assistant gemmer TTS-filer': 'The folder where Home Assistant keeps TTS files',
+  'Hent stemmer': 'Load voices',
+  'Henter…': 'Loading…',
+  '{a} af {b} tekster fundet': '{a} of {b} lines found',
+  'Mangler': 'Missing',
+  'Lydstyrke': 'Volume',
+
   // ---- surprises, sound cues
   'Overrask mig: tilfældigt forløb, hastighed og kategori': 'Surprise me: random pattern, speed and category',
   'Af og til et uventet sving: et kort udbrud, en pludselig pause eller et ekstra edge':

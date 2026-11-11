@@ -329,3 +329,6 @@ details.more .toggle { margin: 4px 0 10px; }
   .sidebar { border-right: 0; border-bottom: 1px solid var(--line); }
   .library { max-height: 300px; }
 }
+
+.voice-box { margin: -4px 0 14px; }
+.voice-box .hint { cursor: help; }

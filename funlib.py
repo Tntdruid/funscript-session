@@ -392,6 +392,60 @@ def make_thumbnail(video_id, video_path, duration_ms=0):
         return target
 
 
+# ---------------------------------------------------------------- voice lines (made in Home Assistant)
+#
+# The user makes the coach's lines with Home Assistant TTS; HA stores each as an mp3 whose ID3
+# title is the spoken text. Matching files are copied (the source folder is only read) into a
+# local cache, so the coach works without HA afterwards.
+
+def normalize_line(text):
+    """'Stop. Træk vejret!' -> 'stop træk vejret' (same rule as the browser)."""
+    return " ".join(re.sub(r"[\W_]+", " ", str(text).lower()).split())
+
+
+def voice_dir():
+    folder = REMUX_DIR.parent / "voice"
+    folder.mkdir(parents=True, exist_ok=True)
+    return Path(os.path.realpath(folder))
+
+
+def _mp3_title(path):
+    if not _FFPROBE:
+        return None
+    try:
+        result = subprocess.run(
+            [_FFPROBE, "-v", "error", "-show_entries", "format_tags=title,artist", "-of", "json", str(path)],
+            capture_output=True, text=True, timeout=20, errors="replace",
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        tags = json.loads(result.stdout or "{}").get("format", {}).get("tags", {})
+        return tags.get("title") or tags.get("TITLE"), tags.get("artist") or tags.get("ARTIST")
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+
+
+def scan_voice_folder(folder, lines):
+    """Find mp3s in `folder` whose title matches one of `lines`; copy them to the cache.
+    Returns {normalized line: {"key", "voice"}}."""
+    import hashlib
+    folder = Path(folder)
+    if not folder.is_dir():
+        raise ValueError(f"Mappen findes ikke: {folder}")
+    wanted = {normalize_line(line) for line in lines if line}
+    found = {}
+    for mp3 in sorted(folder.glob("*.mp3"), key=lambda p: p.stat().st_mtime):  # newest wins
+        info = _mp3_title(mp3)
+        if not info or not info[0]:
+            continue
+        norm = normalize_line(info[0])
+        if norm not in wanted:
+            continue
+        key = hashlib.sha1(norm.encode("utf-8")).hexdigest()[:16]
+        target = voice_dir() / f"{key}.mp3"
+        shutil.copyfile(mp3, target)
+        found[norm] = {"key": key, "voice": info[1] or ""}
+    return found
+
+
 # Script variants that describe up/down strokes, in order of preference for a Handy.
 STROKE_VARIANTS = ["handy", "", "stroke", "l0", "sleeve", "dildo"]
 

@@ -9,6 +9,7 @@ const ui = {
   emptyState: $('emptyState'), playBtn: $('playBtn'), prevBtn: $('prevBtn'), nextBtn: $('nextBtn'),
   timeNow: $('timeNow'), timeTotal: $('timeTotal'), clipInfo: $('clipInfo'), volume: $('volume'),
   levelBtn: $('levelBtn'), cueBtn: $('cueBtn'), cueVol: $('cueVol'),
+  cueMode: $('cueMode'), voiceFolder: $('voiceFolder'), voiceScan: $('voiceScan'), voiceStatus: $('voiceStatus'),
   surprises: $('surprises'), surpriseBtn: $('surpriseBtn'), moreBtn: $('moreBtn'), lessBtn: $('lessBtn'), finishBtn: $('finishBtn'),
   liveCanvas: $('liveCanvas'), timelineCanvas: $('timelineCanvas'),
   lengthChips: $('lengthChips'), customMinutes: $('customMinutes'), clipLength: $('clipLength'),
@@ -1152,7 +1153,7 @@ function applyVolume() {
     return;
   }
   players.forEach((p, i) => {
-    const gain = volume * 10 ** (videoGainDb(playerVideoId(p)) / 20);
+    const gain = volume * 10 ** (videoGainDb(playerVideoId(p)) / 20) * (coachSpeaking ? 0.45 : 1);
     audio.gains[i].gain.setTargetAtTime(gain, audio.ctx.currentTime, 0.05);
   });
 }
@@ -1256,6 +1257,87 @@ function whoosh(ctx, out, { from, to, dur = 0.6, peak = 0.35 }) {
   noise.start(t0);
 }
 
+
+// Spoken lines, made by the user with Home Assistant TTS (see stemme-tekster.txt). A line whose
+// recording is missing falls back to the sound cue.
+const VOICE_LINES = {
+  start: ['Så går vi i gang.', 'Læn dig tilbage, nu begynder det.'],
+  warmupEnd: ['Opvarmningen er slut. Nu starter det.', 'Nu er du varm. Så kører vi.'],
+  faster: ['Lidt hurtigere nu.', 'Tempoet stiger.', 'Op i gear.'],
+  slower: ['Langsommere. Slap af.', 'Ned i tempo.', 'Rolig nu.'],
+  pause: ['Hold en pause.', 'Stop. Træk vejret.', 'Hold igen. Ikke endnu.'],
+  burst: ['Overraskelse! Hurtigt nu!', 'Fuld fart!'],
+  edge: ['Op mod kanten.', 'Tæt på. Hold den.'],
+  finale: ['Finale! Giv slip.', 'Sidste stræk. Nu!'],
+  lastMinute: ['Sidste minut.', 'Et minut tilbage.'],
+  more: ['Hurtigere.', 'Mere.'],
+  less: ['Roligere.', 'Langsommere.'],
+  finish: ['Så slutter vi af.', 'Finalen starter nu.'],
+  end: ['Godt klaret.', 'Det var det. Godt gået.'],
+};
+let voiceFiles = {};          // normalized line -> url
+let coachSpeaking = false;
+const voicePlayer = new Audio();
+voicePlayer.addEventListener('play', () => { coachSpeaking = true; applyVolume(); });
+['ended', 'pause', 'error'].forEach((e) => voicePlayer.addEventListener(e, () => { coachSpeaking = false; applyVolume(); }));
+
+/** Same rule as the server: 'Stop. Træk vejret!' -> 'stop træk vejret'. */
+function normLine(text) {
+  return text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+}
+
+function allVoiceLines() {
+  return [...new Set(Object.values(VOICE_LINES).flat())];
+}
+
+/** Plays a recorded line for `event` if there is one; false = use the sound cue. */
+function speakLine(event) {
+  if (ui.cueMode.value !== 'voice' || LANG !== 'da') return false;
+  const have = (VOICE_LINES[event] || []).filter((line) => voiceFiles[normLine(line)]);
+  if (!have.length) return false;
+  voicePlayer.pause();
+  voicePlayer.src = voiceFiles[normLine(have[Math.floor(Math.random() * have.length)])];
+  voicePlayer.volume = Number(ui.cueVol.value);
+  voicePlayer.play().catch(() => {});
+  return true;
+}
+
+function showVoiceStatus() {
+  const lines = allVoiceLines();
+  const missing = lines.filter((l) => !voiceFiles[normLine(l)]);
+  ui.voiceStatus.textContent = t('{a} af {b} tekster fundet', { a: lines.length - missing.length, b: lines.length });
+  ui.voiceStatus.title = missing.length ? `${t('Mangler')}:\n${missing.join('\n')}` : '';
+}
+
+function showCueMode() {
+  $('voiceBox').hidden = ui.cueMode.value !== 'voice';
+}
+
+async function loadVoices() {
+  try {
+    const res = await api('/api/voice');
+    voiceFiles = res.lines || {};
+    if (res.folder) ui.voiceFolder.value = res.folder;
+  } catch { voiceFiles = {}; }
+  showVoiceStatus();
+}
+
+async function scanVoices() {
+  ui.voiceScan.disabled = true;
+  ui.voiceStatus.textContent = t('Henter…');
+  try {
+    const res = await api('/api/voice/scan', {
+      method: 'POST', body: { folder: ui.voiceFolder.value, lines: allVoiceLines() },
+    });
+    voiceFiles = res.lines || {};
+    showVoiceStatus();
+  } catch (err) {
+    ui.voiceStatus.textContent = err.message;
+  } finally {
+    ui.voiceScan.disabled = false;
+  }
+}
+
 const CUES = {
   start: (c, o) => { tone(c, o, { f0: 523, dur: 0.6 }); tone(c, o, { f0: 784, dur: 0.9, at: 0.18 }); },
   warmupEnd: (c, o) => { tone(c, o, { f0: 587, dur: 0.6 }); tone(c, o, { f0: 880, dur: 0.9, at: 0.18 }); },
@@ -1279,6 +1361,7 @@ function cue(event, force = false) {
   const userAction = ['more', 'less', 'finish'].includes(event);
   if (!userAction && now - lastCoachAt < (force ? 1500 : 4000)) return;
   lastCoachAt = now;
+  if (speakLine(event)) return;
   try {
     const ctx = cueContext();
     const out = ctx.createGain();
@@ -1986,6 +2069,11 @@ ui.cueVol.addEventListener('input', () => {
   $('cueVolLabel').textContent = `${Math.round(ui.cueVol.value * 100)}%`;
   saveJson('cueVol', Number(ui.cueVol.value));
 });
+ui.cueMode.value = loadJson('cueMode', 'sounds');
+showCueMode();
+ui.cueMode.addEventListener('change', () => { saveJson('cueMode', ui.cueMode.value); showCueMode(); });
+ui.voiceScan.addEventListener('click', scanVoices);
+loadVoices();
 $('cueTest').addEventListener('click', () => {
   const was = coachOn;
   coachOn = true;

@@ -10,7 +10,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, urlparse
 
 from funlib import (Library, remux_dir, build_session, session_funscript, rebuild_session,
-                    find_replacement, steer_session)
+                    find_replacement, steer_session, scan_voice_folder, voice_dir)
 
 ROOT = Path(__file__).resolve().parent
 WEB = ROOT / "web"
@@ -112,6 +112,24 @@ class Handler(SimpleHTTPRequestHandler):
                                    "exportPath": str(LIBRARY.export_folder())})
         if path == "/api/library":
             return self.send_json({"folder": LIBRARY.library_folder(), "videos": LIBRARY.videos()})
+        if path == "/api/voice":  # coach lines made in Home Assistant, already in the cache
+            found = json.loads(LIBRARY.get_setting("voice_lines", "{}") or "{}")
+            lines = {norm: f"/api/voice/file/{info['key']}.mp3" for norm, info in found.items()
+                     if (voice_dir() / f"{info['key']}.mp3").is_file()}
+            return self.send_json({"folder": LIBRARY.get_setting("voice_folder", ""), "lines": lines})
+        m = re.fullmatch(r"/api/voice/file/([0-9a-f]{16})\.mp3", path)
+        if m:
+            mp3 = voice_dir() / f"{m.group(1)}.mp3"
+            if not mp3.is_file():
+                return self.send_error(404)
+            body = mp3.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "audio/mpeg")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if path == "/api/audio/status":
             return self.send_json(LIBRARY.audio_state)
         if path == "/api/scan/status":
@@ -258,6 +276,17 @@ class Handler(SimpleHTTPRequestHandler):
             else:  # finished or dismissed
                 LIBRARY.set_setting("resume", "null")
             return self.send_json({"ok": True})
+
+        if path == "/api/voice/scan":  # read HA's tts folder, keep the files matching our lines
+            folder = str(data.get("folder", "")).strip()
+            try:
+                found = scan_voice_folder(folder, [str(x) for x in data.get("lines", [])][:300])
+            except (ValueError, OSError) as exc:
+                return self.send_json({"error": str(exc)}, 400)
+            LIBRARY.set_setting("voice_folder", folder)
+            LIBRARY.set_setting("voice_lines", json.dumps(found, ensure_ascii=False))
+            return self.send_json({"found": len(found),
+                                   "lines": {n: f"/api/voice/file/{i['key']}.mp3" for n, i in found.items()}})
 
         if path == "/api/feedback":  # learning: watched to the end / skipped / swapped / removed
             try:
