@@ -73,6 +73,15 @@ hastighed og længde. Det aktive klip er markeret; klik for at springe til et kl
 omdøbes med ✎ (eller dobbeltklik på navnet) – også fra listen over gemte sessioner. De gemte
 filer i `sessions\` får samme nye navn.
 
+**Overrask mig:** 🎲 ved "Byg session" bygger en session med tilfældigt forløb, hastighed og
+(nogle gange) kategori, med den valgte længde. "Overraskelser ⚡" (under Flere indstillinger) giver
+2–4 uventede sving per 20 min: ⚡ et kort udbrud (+40%), ⏸ en pludselig pause eller 🔥 et ekstra
+edge (op og så stop). De vises på klip-kortene.
+
+**Stemme-coach:** 🗣 ved afspilleren. Browserens egen stemme (dansk/engelsk) siger korte ting ved
+start, slut på opvarmning, temposkift, pauser, udbrud, finale, sidste minut og ▲▼⏹. Højst hvert
+6. sek (vigtige 2,5 sek); videoens lyd dæmpes, mens den taler. Lydstyrken findes under Justering.
+
 **Live-styring:** Under afspilning vælger ▲ (eller pil op) hurtigere og ▼ (pil ned) roligere
 kommende klip (±15% per tryk), og ⏹ erstatter resten med ca. 2 min finale. Klippet, der spiller
 nu, fortsætter uforstyrret; Handy'en får det nye script i baggrunden. Ændringen gemmes i sessionen.

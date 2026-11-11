@@ -85,6 +85,7 @@
             </label>
             <input id="volume" type="range" min="0" max="1" step="0.05" value="0.6" title="Lydstyrke" />
             <button id="levelBtn" class="level-btn on" title="Udjævn lydstyrke mellem videoer">≋</button>
+            <button id="voiceBtn" class="level-btn" title="Stemme-coach">🗣</button>
             <button id="fullscreenBtn" title="Fuldskærm (F eller dobbeltklik på videoen)">⛶</button>
           </div>
 
@@ -155,12 +156,17 @@
                   <option value="only">Kun videoer med .vib-script (100% original)</option>
                 </select>
               </label>
+              <label class="toggle" title="Af og til et uventet sving: et kort udbrud, en pludselig pause eller et ekstra edge">
+                <input type="checkbox" id="surprises" /> Overraskelser ⚡</label>
               <label class="toggle"><input type="checkbox" id="onlyFavs" /> Kun favoritter ★</label>
               <label class="toggle" title="Fra = scriptet er 100% som dine filer, også ved klipskift">
                 <input type="checkbox" id="smooth" checked /> Glidende overgange mellem klip</label>
             </details>
 
-            <button id="buildBtn" class="primary wide build-btn">Byg session</button>
+            <div class="build-row">
+              <button id="buildBtn" class="primary wide build-btn">Byg session</button>
+              <button id="surpriseBtn" class="build-btn dice" title="Overrask mig: tilfældigt forløb, hastighed og kategori">🎲</button>
+            </div>
             <div class="hint" id="buildStatus"></div>
           </section>
 
@@ -219,6 +225,9 @@
               <summary>Justering <span class="summary-value">forsinkelse, slag-område</span></summary>
               <label class="field">Forsinkelse <span id="offsetLabel">0 ms</span>
                 <input id="offsetSlider" type="range" min="-300" max="300" step="10" value="0" />
+              </label>
+              <label class="field">Stemme-coach lydstyrke <span id="voiceVolLabel">80%</span>
+                <input id="voiceVol" type="range" min="0" max="1" step="0.05" value="0.8" />
               </label>
               <label class="field">Slag-område <span id="rangeLabel">0 – 100</span>
                 <div class="inline">

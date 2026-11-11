@@ -8,7 +8,8 @@ const ui = {
   remuxBox: $('remuxBox'), remuxBtn: $('remuxBtn'), remuxStatus: $('remuxStatus'), remuxBar: $('remuxBar'),
   emptyState: $('emptyState'), playBtn: $('playBtn'), prevBtn: $('prevBtn'), nextBtn: $('nextBtn'),
   timeNow: $('timeNow'), timeTotal: $('timeTotal'), clipInfo: $('clipInfo'), volume: $('volume'),
-  levelBtn: $('levelBtn'), moreBtn: $('moreBtn'), lessBtn: $('lessBtn'), finishBtn: $('finishBtn'),
+  levelBtn: $('levelBtn'), voiceBtn: $('voiceBtn'), voiceVol: $('voiceVol'),
+  surprises: $('surprises'), surpriseBtn: $('surpriseBtn'), moreBtn: $('moreBtn'), lessBtn: $('lessBtn'), finishBtn: $('finishBtn'),
   liveCanvas: $('liveCanvas'), timelineCanvas: $('timelineCanvas'),
   lengthChips: $('lengthChips'), customMinutes: $('customMinutes'), clipLength: $('clipLength'),
   speedSlider: $('speedSlider'), speedLabel: $('speedLabel'), curveChips: $('curveChips'),
@@ -634,6 +635,7 @@ async function buildSession() {
         targetSpeed: Number(ui.speedSlider.value) || null,
         maxSpeed: Number(ui.maxSpeedSlider.value) || null,
         warmupMinutes: Number(ui.warmupSlider.value) || 0,
+        surprises: ui.surprises.checked,
         smooth: ui.smooth.checked,
         vibMode: effectiveVibMode(),
         curve: state.curve,
@@ -695,6 +697,7 @@ async function loadSessions() {
 
 async function openSession(session, startIndex = 0, resume = false) {
   watched = {};
+  if (state.session?.id !== session.id) { coachMarks = {}; coachClip = -1; }
   lastWatchTime = null;
   setPlaying(false);
   const sameSession = state.session?.id === session.id;
@@ -881,7 +884,7 @@ function renderClipStrip() {
     card.className = 'clip-card';
     card.title = `${v?.title || clip.name}\n${t('{range} i videoen', { range: `${fmtTime(clip.startMs)}–${fmtTime(clip.endMs)}` })}`;
     card.innerHTML = `
-      <span class="num">${i + 1}</span>${clip.warmup ? `<span class="warm-badge">${t('Opvarmning')}</span>` : ''}
+      <span class="num">${i + 1}</span>${clip.surprise ? `<span class="surprise-badge">${SURPRISE_ICONS[clip.surprise]}</span>` : ''}${clip.warmup ? `<span class="warm-badge">${t('Opvarmning')}</span>` : ''}
       <img loading="lazy" alt="" src="/thumb/${clip.videoId}?h=420" />
       <div class="ctext">
         <div class="ct">${escapeHtml(v?.title || clip.name)}</div>
@@ -1149,7 +1152,7 @@ function applyVolume() {
     return;
   }
   players.forEach((p, i) => {
-    const gain = volume * 10 ** (videoGainDb(playerVideoId(p)) / 20);
+    const gain = volume * 10 ** (videoGainDb(playerVideoId(p)) / 20) * (coachSpeaking ? 0.45 : 1);
     audio.gains[i].gain.setTargetAtTime(gain, audio.ctx.currentTime, 0.05);
   });
 }
@@ -1179,6 +1182,111 @@ async function watchAudioMeasuring() {
     if (!ui.scanBtn.disabled) ui.scanStatus.textContent = hint;
     await loadLibrary();
   }
+}
+
+// ------------------------------------------------------------------ surprise me + voice coach
+
+const SURPRISE_ICONS = { burst: '⚡', pause: '⏸', edge: '🔥', edge_stop: '⏸' };
+
+/** 🎲: random pattern, speed and (sometimes) category; keeps the chosen length. */
+function surpriseMe() {
+  const pick = (list) => list[Math.floor(Math.random() * list.length)];
+  const curves = [...ui.curveChips.querySelectorAll('button')];
+  const curve = pick(curves);
+  curve.click();
+  ui.speedSlider.value = pick([0, 140, 180, 220, 260, 300]);
+  updateSpeedLabel();
+  const counts = new Map();
+  state.library.filter((v) => v.hasScript && v.playable && v.rating >= 0)
+    .forEach((v) => counts.set(v.category, (counts.get(v.category) || 0) + 1));
+  const big = [...counts].filter(([, n]) => n >= 8).map(([name]) => name);
+  setCategories(Math.random() < 0.5 || !big.length ? [] : [pick(big)]);
+  ui.surprises.checked = true;
+  buildSession();
+}
+
+// The coach speaks through the browser's own speech synthesis, in the UI language.
+const COACH_LINES = {
+  start: ['Så går vi i gang.', 'Klar? Vi starter.', 'Læn dig tilbage. Nu begynder det.'],
+  warmupEnd: ['Opvarmningen er slut. Nu starter det.', 'Så er du varm. Nu kører vi.'],
+  faster: ['Lidt hurtigere nu.', 'Tempoet stiger.', 'Op i gear.'],
+  slower: ['Langsommere… slap af.', 'Ned i tempo.', 'Rolig nu.'],
+  pause: ['Hold den… pause.', 'Stop. Træk vejret.', 'Hold igen… ikke endnu.'],
+  burst: ['Overraskelse! Hurtigt nu!', 'Fuld fart!', 'Nu går det stærkt!'],
+  edge: ['Op mod kanten…', 'Tæt på… hold den.', 'Byg op… og hold.'],
+  finale: ['Finale! Giv slip.', 'Sidste stræk. Nu!', 'Her kommer finalen.'],
+  lastMinute: ['Sidste minut.', 'Ét minut tilbage.'],
+  more: ['Mere!', 'Hurtigere, sådan.'],
+  less: ['Roligere.', 'Ned i tempo.'],
+  finish: ['Finale nu!', 'Så slutter vi af.'],
+  end: ['Godt klaret.', 'Det var det. Godt gået.'],
+};
+let coachOn = loadJson('coachOn', false);
+let lastCoachAt = -Infinity;
+let coachSpeaking = false;
+let coachMarks = {};      // what has been said in this session (start, warm-up, last minute, end)
+let coachClip = -1;
+
+function coachVoice() {
+  const voices = speechSynthesis.getVoices();
+  const wanted = LANG === 'da' ? 'da' : 'en';
+  return voices.find((v) => v.lang.toLowerCase().startsWith(wanted)) || null;
+}
+
+function say(event, force = false) {
+  if (!coachOn || !('speechSynthesis' in window)) return;
+  const now = performance.now();
+  // never chatter: 6 s between lines, 2.5 s for important ones; answers to ▲▼⏹ come at once
+  const userAction = ['more', 'less', 'finish'].includes(event);
+  if (!userAction && now - lastCoachAt < (force ? 2500 : 6000)) return;
+  const lines = COACH_LINES[event];
+  if (!lines) return;
+  lastCoachAt = now;
+  const utterance = new SpeechSynthesisUtterance(t(lines[Math.floor(Math.random() * lines.length)]));
+  const voice = coachVoice();
+  if (voice) utterance.voice = voice;
+  utterance.lang = LANG === 'da' ? 'da-DK' : 'en-US';
+  utterance.volume = Number(ui.voiceVol.value);
+  utterance.rate = 1.0;
+  utterance.onstart = () => { coachSpeaking = true; applyVolume(); };
+  utterance.onend = utterance.onerror = () => { coachSpeaking = false; applyVolume(); };
+  speechSynthesis.cancel();
+  speechSynthesis.speak(utterance);
+}
+
+/** Called on every tick: speaks on clip changes and on session milestones. */
+function coachTick() {
+  const session = state.session;
+  if (!coachOn || !session || !state.playing || switching) return;
+  const left = session.totalMs - state.sessionTime;
+  const warmEnd = warmupEnd();
+  if (!coachMarks.start) { coachMarks.start = true; say('start', true); return; }
+  if (warmEnd && !coachMarks.warmup && state.sessionTime >= warmEnd) {
+    coachMarks.warmup = true; say('warmupEnd', true); return;
+  }
+  if (!coachMarks.lastMinute && session.totalMs > 180000 && left < 60000 && left > 50000) {
+    coachMarks.lastMinute = true; say('lastMinute', true); return;
+  }
+  if (state.clipIndex === coachClip) return;
+  const prev = session.clips[coachClip];
+  const clip = session.clips[state.clipIndex];
+  coachClip = state.clipIndex;
+  if (!prev || !clip || clip.warmup) return;
+  const base = session.params?.targetSpeed || prev.targetSpeed || 200;
+  if (clip.surprise === 'burst') say('burst', true);
+  else if (clip.surprise === 'edge') say('edge', true);
+  else if (clip.surprise === 'pause' || clip.surprise === 'edge_stop' || clip.targetSpeed < base * 0.55) say('pause');
+  else if (left < 150000 && clip.targetSpeed > base * 1.3) say('finale');
+  else if (clip.targetSpeed > prev.targetSpeed * 1.12) say('faster');
+  else if (clip.targetSpeed < prev.targetSpeed * 0.88) say('slower');
+}
+
+function toggleCoach() {
+  coachOn = !coachOn;
+  saveJson('coachOn', coachOn);
+  ui.voiceBtn.classList.toggle('on', coachOn);
+  if (!coachOn && 'speechSynthesis' in window) speechSynthesis.cancel();
+  if (coachOn) { lastCoachAt = -Infinity; say('start', true); }
 }
 
 // ------------------------------------------------------------------ live steering + learning
@@ -1307,6 +1415,7 @@ function tick() {
           goToClip(state.clipIndex + 1);
         } else {
           state.sessionTime = state.session.totalMs;
+          if (!coachMarks.end) { coachMarks.end = true; say('end', true); }
           setPlaying(false);
         }
       }
@@ -1314,6 +1423,7 @@ function tick() {
     driveDevice(state.sessionTime);
     checkHandyDrift();
     if (state.playing) savePosition();
+    coachTick();
   }
 }
 
@@ -1827,9 +1937,21 @@ document.addEventListener('fullscreenchange', () => {
   else videoWrap.classList.remove('show-ui');
 });
 ui.nextBtn.addEventListener('click', nextClip);
-ui.moreBtn.addEventListener('click', () => steer('more'));
-ui.lessBtn.addEventListener('click', () => steer('less'));
-ui.finishBtn.addEventListener('click', () => steer('finish'));
+ui.moreBtn.addEventListener('click', () => { say('more', true); steer('more'); });
+ui.lessBtn.addEventListener('click', () => { say('less', true); steer('less'); });
+ui.finishBtn.addEventListener('click', () => { say('finish', true); steer('finish'); });
+ui.surpriseBtn.addEventListener('click', surpriseMe);
+ui.voiceBtn.addEventListener('click', toggleCoach);
+ui.voiceBtn.classList.toggle('on', coachOn);
+ui.surprises.checked = loadJson('surprises', false);
+ui.surprises.addEventListener('change', () => saveJson('surprises', ui.surprises.checked));
+ui.voiceVol.value = loadJson('voiceVol', 0.8);
+$('voiceVolLabel').textContent = `${Math.round(ui.voiceVol.value * 100)}%`;
+ui.voiceVol.addEventListener('input', () => {
+  $('voiceVolLabel').textContent = `${Math.round(ui.voiceVol.value * 100)}%`;
+  saveJson('voiceVol', Number(ui.voiceVol.value));
+});
+if ('speechSynthesis' in window) speechSynthesis.getVoices(); // voices load lazily
 $('forgetBtn').addEventListener('click', forgetTaste);
 ui.prevBtn.addEventListener('click', () => {
   const clip = state.session?.clips[state.clipIndex];

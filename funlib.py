@@ -1327,7 +1327,7 @@ class ClipPicker:
 def build_session(videos, total_ms, clip_ms=None, curve="constant", target=None,
                   seed=None, scripts=None, max_speed=None, smooth=True,
                   vib_scripts=None, vib_mode="derive", lang="da", avoid=None, warmup_ms=0,
-                  taste=None):
+                  taste=None, surprises=False):
     """Pick clips from `videos` so they add up to `total_ms` at a matching speed.
 
     `warmup_ms` adds a warm-up before the session: calm video clips while the device stays
@@ -1362,10 +1362,27 @@ def build_session(videos, total_ms, clip_ms=None, curve="constant", target=None,
     clips = []
     elapsed = 0
     warmup_ms = int(max(0, warmup_ms or 0))
+    # "surprises": now and then the session swerves - a burst, a sudden pause or an extra edge
+    surprise_rng = random.Random(f"{seed}-surprise")
+    surprise = {"next": None, "cooldown": 2}
+
+    def surprise_factor(progress):
+        if surprise["next"]:                      # second half of an extra edge: stop
+            kind, surprise["next"] = surprise["next"], None
+            return kind, SURPRISES[kind]
+        surprise["cooldown"] -= 1
+        if surprise["cooldown"] > 0 or not 0.1 < progress < 0.85 or surprise_rng.random() > 0.4:
+            return None, 1.0
+        surprise["cooldown"] = 3
+        kind = surprise_rng.choice(["burst", "pause", "edge"])
+        if kind == "edge":
+            surprise["next"] = "edge_stop"
+        return kind, SURPRISES[kind]
 
     def fill(until, warmup):
         nonlocal elapsed
         span_start = elapsed
+        kind = None
         while until - elapsed > 1000 and len(clips) < 500:
             remaining = until - elapsed
             length = min(clip_ms, remaining)
@@ -1374,13 +1391,18 @@ def build_session(videos, total_ms, clip_ms=None, curve="constant", target=None,
             if warmup:  # calm-looking clips; the device doesn't move anyway
                 clip_target = target * 0.6
             else:
-                clip_target = target * CURVES[curve]((elapsed - warmup_ms + length / 2) / total_ms)
+                progress = (elapsed - warmup_ms + length / 2) / total_ms
+                clip_target = target * CURVES[curve](progress)
+                kind, factor = surprise_factor(progress) if surprises else (None, 1.0)
+                clip_target *= factor
             if max_speed:
                 clip_target = min(clip_target, max_speed * 0.9)
             # the last clip of a span keeps its exact end, so the session length stays right
             clip = picker.pick(length, clip_target, clips[-1] if clips else None,
                                keep_end=length >= remaining, warmup=warmup)
             clip["offsetMs"] = int(elapsed)
+            if not warmup and kind:
+                clip["surprise"] = kind
             clips.append(clip)
             elapsed += clip["endMs"] - clip["startMs"]
 
@@ -1404,13 +1426,16 @@ def build_session(videos, total_ms, clip_ms=None, curve="constant", target=None,
         "totalMs": int(elapsed),
         "params": {"minutes": total_ms / 60000, "clipMs": clip_ms, "curve": curve,
                    "targetSpeed": round(target, 1), "seed": seed, "maxSpeed": max_speed,
-                   "smooth": bool(smooth), "vibMode": vib_mode, "warmupMs": warmup_ms},
+                   "smooth": bool(smooth), "vibMode": vib_mode, "warmupMs": warmup_ms,
+                   "surprises": bool(surprises)},
         "vib": vib,
         "vib2": vib2,
         "clips": clips,
         "actions": actions,
     }
 
+
+SURPRISES = {"burst": 1.4, "pause": 0.45, "edge": 1.3, "edge_stop": 0.45}
 
 STEER_FACTOR = 1.15     # ▲/▼ change the upcoming clips' speed by 15%
 FINISH_MS = 120000      # "finish now": about two minutes of finale

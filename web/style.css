@@ -112,6 +112,9 @@ details.more > summary:hover { color: var(--text); }
 .summary-value { margin-left: auto; color: var(--text); font-size: 12px; }
 details.more .toggle { margin: 4px 0 10px; }
 .build-btn { margin-top: 10px; }
+.build-row { display: flex; gap: 8px; }
+.build-row .dice { flex: none; width: 52px; font-size: 20px; padding: 6px; }
+.clip-card .surprise-badge { position: absolute; top: 6px; right: 6px; font-size: 15px; filter: drop-shadow(0 0 2px #000); }
 
 /* devices */
 .info { color: var(--muted); font-weight: 400; cursor: help; font-size: 13px; }
