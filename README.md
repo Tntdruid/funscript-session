@@ -80,7 +80,9 @@ edge (op og så stop). De vises på klip-kortene.
 
 **Stemme-coach:** 🗣 ved afspilleren. Browserens egen stemme (dansk/engelsk) siger korte ting ved
 start, slut på opvarmning, temposkift, pauser, udbrud, finale, sidste minut og ▲▼⏹. Højst hvert
-6. sek (vigtige 2,5 sek); videoens lyd dæmpes, mens den taler. Lydstyrken findes under Justering.
+6. sek (vigtige 2,5 sek); videoens lyd dæmpes, mens den taler. Under Justering vælges stemme, lydstyrke, tempo og tonehøjde,
+og 🔊 afspiller en prøve. Den bedste stemme vælges automatisk: i Microsoft Edge er det de naturlige
+danske stemmer (Christel, kvinde; Jeppe, mand), der lyder langt bedre end Windows' gamle "Helle".
 
 **Live-styring:** Under afspilning vælger ▲ (eller pil op) hurtigere og ▼ (pil ned) roligere
 kommende klip (±15% per tryk), og ⏹ erstatter resten med ca. 2 min finale. Klippet, der spiller

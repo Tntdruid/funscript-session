@@ -9,6 +9,7 @@ const ui = {
   emptyState: $('emptyState'), playBtn: $('playBtn'), prevBtn: $('prevBtn'), nextBtn: $('nextBtn'),
   timeNow: $('timeNow'), timeTotal: $('timeTotal'), clipInfo: $('clipInfo'), volume: $('volume'),
   levelBtn: $('levelBtn'), voiceBtn: $('voiceBtn'), voiceVol: $('voiceVol'),
+  voiceSelect: $('voiceSelect'), voiceRate: $('voiceRate'), voicePitch: $('voicePitch'),
   surprises: $('surprises'), surpriseBtn: $('surpriseBtn'), moreBtn: $('moreBtn'), lessBtn: $('lessBtn'), finishBtn: $('finishBtn'),
   liveCanvas: $('liveCanvas'), timelineCanvas: $('timelineCanvas'),
   lengthChips: $('lengthChips'), customMinutes: $('customMinutes'), clipLength: $('clipLength'),
@@ -1227,10 +1228,31 @@ let coachSpeaking = false;
 let coachMarks = {};      // what has been said in this session (start, warm-up, last minute, end)
 let coachClip = -1;
 
-function coachVoice() {
-  const voices = speechSynthesis.getVoices();
+/** Voices for the UI language, best first: neural/"Natural" (Edge), then online, then local. */
+function coachVoices() {
   const wanted = LANG === 'da' ? 'da' : 'en';
-  return voices.find((v) => v.lang.toLowerCase().startsWith(wanted)) || null;
+  const quality = (v) => (/natural|neural/i.test(v.name) ? 3 : 0) + (/online|google/i.test(v.name) ? 2 : 0)
+    + (v.localService ? 0 : 1);
+  return speechSynthesis.getVoices()
+    .filter((v) => v.lang.toLowerCase().startsWith(wanted))
+    .sort((a, b) => quality(b) - quality(a) || a.name.localeCompare(b.name));
+}
+
+function coachVoice() {
+  const voices = coachVoices();
+  const chosen = loadJson(`coachVoice-${LANG}`, null);
+  return voices.find((v) => v.name === chosen) || voices[0] || null;
+}
+
+function renderVoiceSelect() {
+  const voices = coachVoices();
+  const current = coachVoice();
+  ui.voiceSelect.innerHTML = voices.length
+    ? voices.map((v) => `<option value="${escapeHtml(v.name)}">${escapeHtml(v.name.replace(/^Microsoft /, ''))}</option>`).join('')
+    : `<option value="">${t('Standard')}</option>`;
+  if (current) ui.voiceSelect.value = current.name;
+  // only the old robotic voices? point to Edge's natural ones
+  $('voiceHint').hidden = LANG !== 'da' || voices.some((v) => /natural|neural|online/i.test(v.name));
 }
 
 function say(event, force = false) {
@@ -1244,10 +1266,11 @@ function say(event, force = false) {
   lastCoachAt = now;
   const utterance = new SpeechSynthesisUtterance(t(lines[Math.floor(Math.random() * lines.length)]));
   const voice = coachVoice();
-  if (voice) utterance.voice = voice;
+  try { if (voice) utterance.voice = voice; } catch { /* keep the browser default */ }
   utterance.lang = LANG === 'da' ? 'da-DK' : 'en-US';
   utterance.volume = Number(ui.voiceVol.value);
-  utterance.rate = 1.0;
+  utterance.rate = Number(ui.voiceRate.value);
+  utterance.pitch = Number(ui.voicePitch.value);
   utterance.onstart = () => { coachSpeaking = true; applyVolume(); };
   utterance.onend = utterance.onerror = () => { coachSpeaking = false; applyVolume(); };
   speechSynthesis.cancel();
@@ -1951,7 +1974,23 @@ ui.voiceVol.addEventListener('input', () => {
   $('voiceVolLabel').textContent = `${Math.round(ui.voiceVol.value * 100)}%`;
   saveJson('voiceVol', Number(ui.voiceVol.value));
 });
-if ('speechSynthesis' in window) speechSynthesis.getVoices(); // voices load lazily
+if ('speechSynthesis' in window) {
+  renderVoiceSelect();
+  speechSynthesis.addEventListener('voiceschanged', renderVoiceSelect); // voices load lazily
+}
+ui.voiceSelect.addEventListener('change', () => saveJson(`coachVoice-${LANG}`, ui.voiceSelect.value));
+[['voiceRate', 'voiceRateLabel'], ['voicePitch', 'voicePitchLabel']].forEach(([id, label]) => {
+  ui[id].value = loadJson(id, 1);
+  const show = () => { $(label).textContent = `${Math.round(ui[id].value * 100)}%`; };
+  show();
+  ui[id].addEventListener('input', () => { show(); saveJson(id, Number(ui[id].value)); });
+});
+$('voiceTest').addEventListener('click', () => {
+  const was = coachOn;
+  coachOn = true;
+  lastCoachAt = -Infinity;
+  try { say('faster', true); } finally { coachOn = was; }
+});
 $('forgetBtn').addEventListener('click', forgetTaste);
 ui.prevBtn.addEventListener('click', () => {
   const clip = state.session?.clips[state.clipIndex];

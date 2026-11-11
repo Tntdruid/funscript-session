@@ -182,6 +182,16 @@ const EN = {
   'Sessionen er for lang til Handy (maks ca. 512 KB script)': 'The session is too long for the Handy (max about 512 KB of script)',
   'Upload af script til Handy fejlede': 'Uploading the script to Handy failed',
 
+  // ---- voice choice
+  'Stemme': 'Voice',
+  'Hør stemmen': 'Hear the voice',
+  'Standard': 'Default',
+  'Stemme lydstyrke': 'Voice volume',
+  'Stemme tempo': 'Voice speed',
+  'Stemme tonehøjde': 'Voice pitch',
+  'Tip: Microsoft Edge har naturlige danske stemmer (Christel, Jeppe), der lyder meget bedre.':
+    'Tip: Microsoft Edge has natural Danish voices (Christel, Jeppe) that sound much better.',
+
   // ---- surprises, voice coach
   'Så går vi i gang.': 'Here we go.',
   'Klar? Vi starter.': "Ready? Let's start.",
