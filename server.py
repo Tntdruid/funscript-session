@@ -314,7 +314,7 @@ class Handler(SimpleHTTPRequestHandler):
             try:
                 rebuilt = steer_session(session, int(data.get("fromIndex", -1)), LIBRARY.videos(),
                                         data.get("mode"), LIBRARY.script_actions, LIBRARY.vib_actions,
-                                        data.get("seed"), LIBRARY.taste())
+                                        data.get("seed"), LIBRARY.taste(), LIBRARY.recent_use())
             except (KeyError, TypeError, ValueError) as exc:
                 return self.send_json({"error": str(exc) or "Ugyldig styring"}, 400)
             return self.send_json(LIBRARY.update_session(rebuilt))
@@ -334,7 +334,8 @@ class Handler(SimpleHTTPRequestHandler):
                     pool = [v for v in videos.values() if not wanted or v["id"] in wanted]
                     clips = list(session["clips"])
                     clips[index] = find_replacement(pool, session, index, data.get("seed"),
-                                                    LIBRARY.script_actions, LIBRARY.taste())
+                                                    LIBRARY.script_actions, LIBRARY.taste(),
+                                                    LIBRARY.recent_use())
                 else:  # edit: new order / removed clips, each must be a real part of a video
                     clips = []
                     for c in data.get("clips") or []:
@@ -419,6 +420,7 @@ class Handler(SimpleHTTPRequestHandler):
                 warmup_ms=min(10.0, max(0.0, float(data.get("warmupMinutes") or 0))) * 60000,
                 taste=LIBRARY.taste(),
                 surprises=bool(data.get("surprises")),
+                recent=LIBRARY.recent_use(),
             )
         except (KeyError, ValueError, TypeError) as exc:
             return self.send_json({"error": str(exc)}, 400)

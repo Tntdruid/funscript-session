@@ -902,6 +902,19 @@ class Library:
         return {vid: {"score": max(-1.0, min(1.0, total / 5)), "avoid": avoid.get(vid, [])}
                 for vid, total in totals.items()} |                {vid: {"score": 0.0, "avoid": parts} for vid, parts in avoid.items() if vid not in totals}
 
+    def recent_use(self, sessions=10):
+        """How recently each video was used: the last `sessions` sessions, newest weighs 1.0,
+        each older one 30% less. Used to keep consecutive sessions from repeating videos."""
+        with self.lock:
+            rows = self.conn.execute(
+                "SELECT clips FROM sessions ORDER BY created_at DESC LIMIT ?", (sessions,)).fetchall()
+        recent = {}
+        for rank, row in enumerate(rows):
+            weight = 0.7 ** rank
+            for vid in {c["videoId"] for c in json.loads(row["clips"])}:
+                recent[vid] = recent.get(vid, 0.0) + weight
+        return recent
+
     def reset_taste(self):
         with self.lock, self.conn:
             self.conn.execute("DELETE FROM feedback")
@@ -1336,7 +1349,7 @@ def rebuild_session(session, clips, scripts, vib_scripts):
             "totalMs": offset}
 
 
-def find_replacement(videos, session, index, seed=None, scripts=None, taste=None):
+def find_replacement(videos, session, index, seed=None, scripts=None, taste=None, recent=None):
     """Another clip of the same length and similar speed to replace clip `index`, preferably
     from a video that isn't in the session yet. Never returns the clip it replaces."""
     clips = session["clips"]
@@ -1344,7 +1357,7 @@ def find_replacement(videos, session, index, seed=None, scripts=None, taste=None
     params = session.get("params", {})
     max_speed = float(params["maxSpeed"]) if params.get("maxSpeed") else None
     picker = ClipPicker(eligible_videos(videos, params.get("vibMode", "derive")),
-                        scripts or {}, max_speed, seed, taste)
+                        scripts or {}, max_speed, seed, taste, recent)
     for c in clips:
         picker.mark_used(c)
     picker.usage = {k: n * 3 for k, n in picker.usage.items()}  # really prefer something new
@@ -1390,8 +1403,9 @@ class ClipPicker:
     `taste` maps video id -> {"score": -1..1, "avoid": [(start, end), ...]}: liked videos get
     a bonus, and parts the user skipped or swapped away count as already used."""
 
-    def __init__(self, eligible, scripts, max_speed=None, seed=None, taste=None):
+    def __init__(self, eligible, scripts, max_speed=None, seed=None, taste=None, recent=None):
         self.eligible = eligible
+        self.recent = recent or {}
         self.by_id = {v["id"]: v for v in eligible}
         self.scripts = scripts
         self.max_speed = max_speed
@@ -1439,9 +1453,10 @@ class ClipPicker:
             score -= 0.05 * self.taste.get(v["id"], {}).get("score", 0)  # learned: softer than ★
             if prev_video is not None and v["id"] != prev_video["id"] and _related(v, prev_video):
                 score -= 0.05                                 # a natural follow-up
-            score += 0.15 * self.usage.get(key, 0)            # spread over many videos
+            score += 0.45 * self.usage.get(key, 0)            # spread over many videos
+            score += 0.3 * min(self.recent.get(v["id"], 0.0), 2.0)  # used in the last sessions
             score += 0.02 * min(v["playCount"], 10)           # favour less-played videos
-            score += self.rng.random() * 0.08                 # variety between builds
+            score += self.rng.random() * 0.15                 # variety between builds
             if best is None or score < best[0]:
                 best = (score, v, start, end, avg)
 
@@ -1467,7 +1482,7 @@ class ClipPicker:
 def build_session(videos, total_ms, clip_ms=None, curve="constant", target=None,
                   seed=None, scripts=None, max_speed=None, smooth=True,
                   vib_scripts=None, vib_mode="derive", lang="da", avoid=None, warmup_ms=0,
-                  taste=None, surprises=False):
+                  taste=None, surprises=False, recent=None):
     """Pick clips from `videos` so they add up to `total_ms` at a matching speed.
 
     `warmup_ms` adds a warm-up before the session: calm video clips while the device stays
@@ -1494,7 +1509,7 @@ def build_session(videos, total_ms, clip_ms=None, curve="constant", target=None,
     min_clip = min(MIN_CLIP_MS, total_ms)
     clip_ms = int(max(min_clip, min(clip_ms, total_ms)))
 
-    picker = ClipPicker(eligible, scripts, max_speed, seed, taste)
+    picker = ClipPicker(eligible, scripts, max_speed, seed, taste, recent)
     # "build similar": treat the previous session's clips as already used, so new parts are picked
     for clip in avoid or []:
         picker.mark_used(clip, count=False)
@@ -1581,7 +1596,8 @@ STEER_FACTOR = 1.15     # ▲/▼ change the upcoming clips' speed by 15%
 FINISH_MS = 120000      # "finish now": about two minutes of finale
 
 
-def steer_session(session, from_index, videos, mode, scripts, vib_scripts, seed=None, taste=None):
+def steer_session(session, from_index, videos, mode, scripts, vib_scripts, seed=None, taste=None,
+                  recent=None):
     """Re-pick the clips after `from_index` while that clip keeps playing.
 
     mode "more"/"less": same lengths, 15% faster/slower. mode "finish": replace the rest
@@ -1598,7 +1614,7 @@ def steer_session(session, from_index, videos, mode, scripts, vib_scripts, seed=
         wanted = set(params["videoIds"])
         pool = [v for v in videos if v["id"] in wanted] or videos
     picker = ClipPicker(eligible_videos(pool, params.get("vibMode", "derive")),
-                        scripts, max_speed, seed, taste)
+                        scripts, max_speed, seed, taste, recent)
     for clip in clips:
         picker.mark_used(clip, count=clip in keep)
 
