@@ -182,6 +182,9 @@ const EN = {
   'Sessionen er for lang til Handy (maks ca. 512 KB script)': 'The session is too long for the Handy (max about 512 KB of script)',
   'Upload af script til Handy fejlede': 'Uploading the script to Handy failed',
 
+  // ---- beat sync
+  '{n} slag/min': '{n} strokes/min',
+
   // ---- voice lines from Home Assistant
   'Signaler': 'Cues',
   'Lyde': 'Sounds',

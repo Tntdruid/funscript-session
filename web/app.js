@@ -857,6 +857,7 @@ function updateClipInfo() {
   if (!clip) { ui.clipInfo.textContent = '–'; return; }
   ui.clipInfo.innerHTML = `${t('Klip {i}/{n}', { i: state.clipIndex + 1, n: clips.length })} · <b>${escapeHtml(clip.name)}</b> ` +
     `${fmtTime(clip.startMs)}–${fmtTime(clip.endMs)} · ${Math.round(clip.speed)} u/s`
+    + (clip.rate ? ` · ${t('{n} slag/min', { n: clip.rate })}` : '')
     + (clip.vib ? ` · vib ${t(clip.vib)}` : '');
 }
 

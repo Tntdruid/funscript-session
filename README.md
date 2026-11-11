@@ -28,6 +28,9 @@ ellers bruges længden af scriptet.
    (højst ±2,5 sek flyttet), næste klip starter helst i samme position som det forrige sluttede,
    slaglængden ligner det forrige klip, en video i samme kategori eller med fælles genre/skuespiller
    foretrækkes som opfølger, og intro/rulletekster (første og sidste 4%) undgås.
+   **Takt-sync:** PMV/Cock Hero-videoer (kendt på kategori, genre eller navn) klippes kun på
+   bundslaget – i beat-synkrone scripts er det musikkens beat – og efter et PMV-klip foretrækkes et
+   klip med samme tempo (slag/min, eller halv/dobbelt takt). Tempoet vises i klip-info.
 3. Klippene lægges efter hinanden og der samles ét funscript for hele sessionen, som gemmes
    i databasen og kan downloades som `.funscript`.
 4. Afspilleren skifter sømløst mellem klip (næste klip forudindlæses) og styrer en enhed via

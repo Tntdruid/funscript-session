@@ -47,7 +47,8 @@ CREATE TABLE IF NOT EXISTS videos (
     meta TEXT,
     issues TEXT,
     audio_db REAL,
-    amps TEXT
+    amps TEXT,
+    rates TEXT
 );
 CREATE TABLE IF NOT EXISTS feedback (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -148,6 +149,17 @@ def check_script(actions, duration_ms, speeds):
     if fastest > SUSPECT_SPEED:
         issues.append({"code": "fast", "max": round(fastest)})
     return issues
+
+
+def window_rates(actions, duration_ms):
+    """Strokes per minute per WINDOW_MS window (counted at the bottom of each stroke).
+    In beat-synced scripts (PMV, Cock Hero) this is the music's tempo."""
+    count = max(1, math.ceil(duration_ms / WINDOW_MS))
+    bottoms = [0] * count
+    for (a0, p0), (a1, p1), (a2, p2) in zip(actions, actions[1:], actions[2:]):
+        if p1 < p0 and p1 < p2 and int(a1 // WINDOW_MS) < count:
+            bottoms[int(a1 // WINDOW_MS)] += 1
+    return [round(n * 60000 / WINDOW_MS) for n in bottoms]
 
 
 def window_amps(actions, duration_ms):
@@ -616,7 +628,7 @@ class Library:
         for column, kind in (("container", "TEXT"), ("rating", "INTEGER DEFAULT 0"),
                              ("vib_path", "TEXT"), ("vib2_path", "TEXT"), ("meta", "TEXT"),
                              ("issues", "TEXT"), ("audio_db", "REAL"),
-                             ("amps", "TEXT")):
+                             ("amps", "TEXT"), ("rates", "TEXT")):
             if column not in columns:  # added after the first release
                 self.conn.execute(f"ALTER TABLE videos ADD COLUMN {column} {kind}")
         if "vib" not in {r["name"] for r in self.conn.execute("PRAGMA table_info(sessions)")}:
@@ -688,7 +700,8 @@ class Library:
         if (video_unchanged and row["size"] == stat.st_size
                 and row["script_path"] == (str(script) if script else None)
                 and row["script_mtime"] == script_mtime
-                and row["issues"] is not None and row["amps"] is not None):  # rows from before the script check get one now
+                and row["issues"] is not None and row["amps"] is not None
+                and row["rates"] is not None):  # rows from before the script check get one now
             if (row["vib_path"], row["vib2_path"], row["meta"]) != (*vib_paths, meta):
                 with self.lock, self.conn:
                     self.conn.execute("UPDATE videos SET vib_path=?, vib2_path=?, meta=? WHERE id=?",
@@ -712,12 +725,14 @@ class Library:
 
         speeds = window_speeds(actions, duration) if actions and duration else []
         amps = window_amps(actions, duration) if actions and duration else []
+        rates = window_rates(actions, duration) if actions and duration else []
         values = dict(
             path=str(path), name=path.stem, extension=path.suffix.lower(), size=stat.st_size,
             video_mtime=stat.st_mtime, duration_ms=duration, container=container,
             script_path=str(script) if script else None, script_mtime=script_mtime,
             action_count=len(actions), avg_speed=average_speed(actions),
-            speeds=json.dumps(speeds), amps=json.dumps(amps), scanned_at=time.time(),
+            speeds=json.dumps(speeds), amps=json.dumps(amps), rates=json.dumps(rates),
+            scanned_at=time.time(),
             vib_path=vib_paths[0], vib2_path=vib_paths[1], meta=meta,
             issues=json.dumps(check_script(actions, duration, speeds)),
         )
@@ -742,6 +757,7 @@ class Library:
         taste = self.taste()
         for v in videos:
             v["taste"] = round(taste.get(v["id"], {}).get("score", 0.0), 2)
+            v["beat"] = is_beat_video(v)
         # A top-level folder holding a single video is that video's own folder, not a category.
         sizes = {}
         for v in videos:
@@ -777,6 +793,7 @@ class Library:
             "scriptPath": row["script_path"], "actionCount": row["action_count"],
             "avgSpeed": row["avg_speed"] or 0, "speeds": json.loads(row["speeds"] or "[]"),
             "amps": json.loads(row["amps"] or "[]"),
+            "rates": json.loads(row["rates"] or "[]"),
             "playable": browser_playable(row["extension"], row["container"], remuxed),
             "container": row["container"],
             "needsRemux": needs_remux(row["container"]) and not remuxed, "remuxed": remuxed,
@@ -1137,18 +1154,37 @@ def _quality_penalty(window):
     return penalty
 
 
+BEAT_WORDS = ("pmv", "cock hero", "cockhero", "beat", "hero")
+
+
+def is_beat_video(v):
+    """PMV / Cock Hero / beat videos: their scripts follow the music's beat."""
+    names = [v.get("category", ""), v.get("name", ""), v.get("title", "")] + list(v.get("genres", []))
+    text = " ".join(names).lower()
+    return any(word in text for word in BEAT_WORDS) or text.startswith("ch ") or " ch - " in f" {text}"
+
+
+def _tempo_distance(a, b):
+    """How far apart two tempos are, allowing half/double time: 0 = same, 0.5 = worst."""
+    if not a or not b:
+        return 0.0
+    d = abs(math.log2(a / b))
+    return min(d % 1, 1 - d % 1)
+
+
 def _mean_amp(amps):
     moving = [a for a in amps if a > 0]
     return sum(moving) / len(moving) if moving else 0.0
 
 
-def _best_window(video, length_ms, target, used_ranges, max_speed=None, prev_amp=None):
+def _best_window(video, length_ms, target, used_ranges, max_speed=None, prev_amp=None, prev_rate=None):
     """Find the start of the clip in `video` whose speed best matches `target`.
 
     With `prev_amp` (stroke length of the previous clip) windows with a similar stroke
     length are preferred, so consecutive clips feel alike and not just move as fast."""
     speeds = video["speeds"]
     amps = video.get("amps") or []
+    rates = (video.get("rates") or []) if prev_rate and video.get("beat") else []
     duration = video["durationMs"]
     if duration <= length_ms or len(speeds) <= 1:
         avg = sum(speeds) / len(speeds) if speeds else 0
@@ -1187,6 +1223,8 @@ def _best_window(video, length_ms, target, used_ranges, max_speed=None, prev_amp
         score += _quality_penalty(speeds[i:j])
         if prev_amp and amps:
             score += 0.3 * abs(_mean_amp(amps[i:j]) - prev_amp) / 100
+        if rates:  # beat videos after a beat video: keep the tempo (half/double time is fine)
+            score += 0.8 * _tempo_distance(_mean_amp(rates[i:j]), prev_rate)
         if duration > 3 * length_ms and (start < duration * 0.04 or end > duration * 0.96):
             score += 0.25                                    # intros and credits
         if best is None or score < best[3]:
@@ -1197,21 +1235,25 @@ def _best_window(video, length_ms, target, used_ranges, max_speed=None, prev_amp
 SNAP_MS = 2500  # how far a clip edge may move to reach a natural cut point
 
 
-def _cut_points(actions):
-    """Times where a cut feels natural: stroke turning points and the start of pauses."""
+def _cut_points(actions, beats_only=False):
+    """Times where a cut feels natural: stroke turning points and the start of pauses.
+    With beats_only only the bottom of each stroke - the beat in beat-synced scripts."""
     points = []
     for (a0, p0), (a1, p1), (a2, p2) in zip(actions, actions[1:], actions[2:]):
-        if (p1 - p0) * (p2 - p1) < 0 or a2 - a1 > 800:
+        if beats_only:
+            if p1 < p0 and p1 < p2:
+                points.append((a1, p1))
+        elif (p1 - p0) * (p2 - p1) < 0 or a2 - a1 > 800:
             points.append((a1, p1))
     return points
 
 
-def snap_clip(actions, start, end, duration, prefer_pos=None, keep_end=False):
+def snap_clip(actions, start, end, duration, prefer_pos=None, keep_end=False, beats_only=False):
     """Move a clip's start/end (at most SNAP_MS) to natural cut points.
 
     The start prefers a point whose position is close to `prefer_pos` (where the previous
     clip ended), so the device barely has to move between clips."""
-    points = _cut_points(actions)
+    points = _cut_points(actions, beats_only)
     if not points:
         return start, end
     near_start = [(t, p) for t, p in points if abs(t - start) <= SNAP_MS and 0 <= t < end - MIN_CLIP_MS]
@@ -1337,6 +1379,7 @@ class ClipPicker:
     def pick(self, length, target, prev=None, keep_end=False, warmup=False):
         prev_video = self.by_id.get(prev["videoId"]) if prev else None
         prev_amp = prev.get("amp") if prev else None
+        prev_rate = prev.get("rate") if prev and prev_video is not None and prev_video.get("beat") else None
         prev_pos = None
         if prev:
             prev_pos = prev.get("endPos")
@@ -1347,7 +1390,7 @@ class ClipPicker:
         for v in self.eligible:
             key = _same_content(v)
             start, end, avg, score = _best_window(v, length, target, self.used.get(key, []),
-                                                  self.max_speed, prev_amp)
+                                                  self.max_speed, prev_amp, prev_rate)
             if abs(avg - target) / target > SPEED_TOLERANCE:
                 score += 2.0                                  # only if nothing else fits
             if v.get("rating", 0) > 0:
@@ -1364,14 +1407,16 @@ class ClipPicker:
         _, v, start, end, avg = best
         actions = self.actions_of(v["id"])
         start, end = snap_clip(actions, start, end, v["durationMs"], prefer_pos=prev_pos,
-                               keep_end=keep_end)
+                               keep_end=keep_end, beats_only=bool(v.get("beat")))
         w0, w1 = start // WINDOW_MS, max(start // WINDOW_MS + 1, end // WINDOW_MS)
+        rate = _mean_amp((v.get("rates") or [])[w0:w1])
         clip = {
             "videoId": v["id"], "name": v["name"],
             "startMs": int(start), "endMs": int(end), "offsetMs": 0,
             "speed": round(avg, 1), "targetSpeed": round(target, 1),
             **({"warmup": True} if warmup else {}),
             "amp": round(_mean_amp((v.get("amps") or [])[w0:w1]), 1),
+            **({"rate": round(rate)} if v.get("beat") and rate else {}),
             "endPos": interpolate(actions, end),
         }
         self.mark_used(clip)
