@@ -415,6 +415,24 @@ def normalize_line(text):
     return " ".join(re.sub(r"[\W_]+", " ", str(text).lower()).split())
 
 
+def generated_dir():
+    """Scripts the app made itself (beat scripts for PMVs) - never next to the videos."""
+    folder = REMUX_DIR.parent / "generated"
+    folder.mkdir(parents=True, exist_ok=True)
+    return Path(os.path.realpath(folder))
+
+
+def generated_script_path(video_path):
+    import hashlib
+    return generated_dir() / (hashlib.sha1(str(video_path).encode("utf-8")).hexdigest()[:16] + ".funscript")
+
+
+def can_generate():
+    """Beat scripts need the optional librosa package."""
+    import importlib.util
+    return bool(_FFMPEG) and importlib.util.find_spec("librosa") is not None
+
+
 def voice_dir():
     folder = REMUX_DIR.parent / "voice"
     folder.mkdir(parents=True, exist_ok=True)
@@ -638,6 +656,7 @@ class Library:
         self.default_export = str(Path(db_path).resolve().parent / "sessions")
         self.scan_state = {"running": False, "done": 0, "total": 0, "message": ""}
         self.audio_state = {"running": False, "done": 0, "total": 0}
+        self.generate_state = {"running": False, "videoId": None, "error": ""}
         self.remux_state = {"running": False, "done": 0, "total": 0, "current": "",
                             "progress": 0.0, "failed": [], "error": ""}
 
@@ -689,6 +708,8 @@ class Library:
         stat = path.stat()
         siblings = list(path.parent.iterdir())
         script = find_script(path, siblings)
+        if script is None and generated_script_path(path).is_file():
+            script = generated_script_path(path)
         script_mtime = script.stat().st_mtime if script else None
         vib, vib2 = find_vib_scripts(path, siblings)
         vib_paths = (str(vib) if vib else None, str(vib2) if vib2 else None)
@@ -755,9 +776,11 @@ class Library:
         root = Path(self.library_folder())
         videos = [self._with_category(self._video_dict(r), root) for r in rows]
         taste = self.taste()
+        generate_ok = can_generate()
         for v in videos:
             v["taste"] = round(taste.get(v["id"], {}).get("score", 0.0), 2)
             v["beat"] = is_beat_video(v)
+            v["canGenerate"] = (not v["hasScript"] and v["beat"] and v["playable"] and generate_ok)
         # A top-level folder holding a single video is that video's own folder, not a category.
         sizes = {}
         for v in videos:
@@ -802,6 +825,7 @@ class Library:
             "hasVib": bool(row["vib_path"]), "hasVib2": bool(row["vib2_path"]),
             **Library._meta_fields(row["meta"], row["name"]),
             "issues": json.loads(row["issues"] or "[]"),
+            "autoScript": bool(row["script_path"]) and Path(row["script_path"]).parent == generated_dir(),
             "loudness": row["audio_db"] if row["audio_db"] is not None and row["audio_db"] > NO_AUDIO else None,
         }
 
@@ -881,6 +905,23 @@ class Library:
     def reset_taste(self):
         with self.lock, self.conn:
             self.conn.execute("DELETE FROM feedback")
+
+    def generate_script(self, video_id):
+        """Make a beat script for a video without one (runs in a background thread)."""
+        import beatgen
+        video = self.video(video_id)
+        self.generate_state = {"running": True, "videoId": video_id, "error": ""}
+        try:
+            if not video:
+                raise RuntimeError("Ukendt video")
+            script = beatgen.generate(video["path"])
+            target = generated_script_path(video["path"])
+            target.write_text(json.dumps(script), encoding="utf-8")
+            self._scan_one(Path(video["path"]))  # picks the new script up and analyses it
+        except Exception as exc:  # reported to the browser
+            self.generate_state["error"] = str(exc)
+        finally:
+            self.generate_state["running"] = False
 
     def set_rating(self, video_id, rating):
         """1 = favourite, -1 = never use in sessions, 0 = neutral."""

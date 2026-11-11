@@ -182,6 +182,12 @@ const EN = {
   'Sessionen er for lang til Handy (maks ca. 512 KB script)': 'The session is too long for the Handy (max about 512 KB of script)',
   'Upload af script til Handy fejlede': 'Uploading the script to Handy failed',
 
+  // ---- beat scripts
+  'Lav script': 'Make script',
+  'Laver script…': 'Making script…',
+  'Lav et script ud fra musikkens beat (tager ca. 10–60 sek)': "Make a script from the music's beat (takes about 10–60 s)",
+  'Scriptet er lavet automatisk ud fra musikken': 'The script was made automatically from the music',
+
   // ---- beat sync
   '{n} slag/min': '{n} strokes/min',
 

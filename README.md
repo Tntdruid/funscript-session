@@ -31,6 +31,13 @@ ellers bruges længden af scriptet.
    **Takt-sync:** PMV/Cock Hero-videoer (kendt på kategori, genre eller navn) klippes kun på
    bundslaget – i beat-synkrone scripts er det musikkens beat – og efter et PMV-klip foretrækkes et
    klip med samme tempo (slag/min, eller halv/dobbelt takt). Tempoet vises i klip-info.
+
+**Auto-scripts til PMV'er:** PMV'er uden script får knappen "🎵 Lav script". Appen finder musikkens
+beat (librosa, i 30-sekunders stykker, så tempo-skift i kompilationer følges) og laver ét slag per
+beat – bunden på beatet, slaglængde efter musikkens styrke, stille passager står stille. Scriptet
+gemmes i appens egen mappe (aldrig ved siden af videoen) og markeres "auto". Testet mod rigtige
+PMV-scripts: 71–99 % af de automatiske slag lander på et rigtigt slag. Kræver `pip install librosa`;
+uden den vises knappen ikke.
 3. Klippene lægges efter hinanden og der samles ét funscript for hele sessionen, som gemmes
    i databasen og kan downloades som `.funscript`.
 4. Afspilleren skifter sømløst mellem klip (næste klip forudindlæses) og styrer en enhed via

@@ -235,7 +235,7 @@ function makeLibraryRow(v) {
     <img class="thumb" loading="lazy" alt="" src="/thumb/${v.id}?h=420" />
     <div class="info">
       <span class="name" title="${escapeHtml(v.path)}">${escapeHtml(v.name)}</span>
-      <span class="meta"><span>${fmtTime(v.durationMs)}</span><span>${reason}</span>${issueBadge(v)}${v.hasVib ? `<span class="vib-badge" title="${t('Har {x}-script', { x: v.hasVib2 ? '.vib + .vib2' : '.vib' })}">vib${v.hasVib2 ? '×2' : ''}</span>` : ''}<canvas></canvas></span>
+      <span class="meta"><span>${fmtTime(v.durationMs)}</span>${v.canGenerate ? genButton(v) : `<span>${reason}</span>`}${autoBadge(v)}${issueBadge(v)}${v.hasVib ? `<span class="vib-badge" title="${t('Har {x}-script', { x: v.hasVib2 ? '.vib + .vib2' : '.vib' })}">vib${v.hasVib2 ? '×2' : ''}</span>` : ''}<canvas></canvas></span>
     </div>
     <div class="rate">
       <button class="fav ${v.rating > 0 ? 'on' : ''}" title="${t('Favorit – foretrækkes i sessioner')}">${v.rating > 0 ? '★' : '☆'}</button>
@@ -268,6 +268,49 @@ async function rateVideo(v, rating, li) {
   renderCategories();
   updateSpeedLabel();
 }
+
+// ------------------------------------------------------------------ beat scripts for PMVs
+
+function genButton(v) {
+  return v.canGenerate
+    ? `<button class="gen-btn" data-gen="${v.id}" title="${t('Lav et script ud fra musikkens beat (tager ca. 10–60 sek)')}">🎵 ${t('Lav script')}</button>`
+    : '';
+}
+
+function autoBadge(v) {
+  return v.autoScript ? `<span class="auto-badge" title="${t('Scriptet er lavet automatisk ud fra musikken')}">auto</span>` : '';
+}
+
+/** Start making a beat script and wait for it; the library reloads when it is done. */
+async function generateScript(id, button) {
+  button.disabled = true;
+  button.textContent = t('Laver script…');
+  try {
+    await api(`/api/videos/${id}/generate`, { method: 'POST', body: {} });
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 1500));
+      const status = await api('/api/generate/status');
+      if (!status.running) {
+        if (status.error) throw new Error(status.error);
+        break;
+      }
+    }
+    await loadLibrary();
+    renderGrid();
+  } catch (err) {
+    button.disabled = false;
+    button.textContent = `🎵 ${t('Lav script')}`;
+    button.title = err.message;
+    alert(err.message);
+  }
+}
+
+document.addEventListener('click', (e) => {
+  const button = e.target.closest('[data-gen]');
+  if (!button) return;
+  e.stopPropagation();
+  generateScript(Number(button.dataset.gen), button);
+}, true);
 
 // ------------------------------------------------------------------ picture grid
 
@@ -376,7 +419,7 @@ function makeGridCard(v) {
     <div class="cinfo">
       <div class="cname">${escapeHtml(v.title)}</div>
       <div class="cpeople">${escapeHtml([v.actors.slice(0, 2).join(', '), v.year].filter(Boolean).join(' · '))}</div>
-      <div class="cmeta"><span>${info}</span>${v.taste > 0.3 ? `<span class="liked" title="${t('Lært: du ser den ofte færdig')}">♥</span>` : ''}${issueBadge(v)}${v.hasVib ? `<span class="vib-badge">vib${v.hasVib2 ? '×2' : ''}</span>` : ''}<span>${escapeHtml(t(v.category))}</span></div>
+      <div class="cmeta">${v.canGenerate ? genButton(v) : `<span>${info}</span>`}${autoBadge(v)}${v.taste > 0.3 ? `<span class="liked" title="${t('Lært: du ser den ofte færdig')}">♥</span>` : ''}${issueBadge(v)}${v.hasVib ? `<span class="vib-badge">vib${v.hasVib2 ? '×2' : ''}</span>` : ''}<span>${escapeHtml(t(v.category))}</span></div>
       <div class="spark-wrap"><canvas data-id="${v.id}"></canvas><span class="spark-pos" hidden></span></div>
     </div>`;
   card.querySelector('img').addEventListener('error', (e) => e.target.classList.add('missing'));

@@ -42,6 +42,11 @@ MESSAGES_EN = {
     "Ukendt feedback": "Unknown feedback",
     "Ugyldig feedback": "Invalid feedback",
     "Ugyldig styring": "Invalid steering",
+    "Der laves allerede et script": "A script is already being made",
+    "librosa er ikke installeret": "librosa is not installed",
+    "Videoen har ingen brugbar lyd": "The video has no usable sound",
+    "Fandt ikke nok beats i musikken": "Found too few beats in the music",
+    "Ukendt video": "Unknown video",
 }
 
 
@@ -130,6 +135,8 @@ class Handler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+        if path == "/api/generate/status":
+            return self.send_json(LIBRARY.generate_state)
         if path == "/api/audio/status":
             return self.send_json(LIBRARY.audio_state)
         if path == "/api/scan/status":
@@ -351,6 +358,14 @@ class Handler(SimpleHTTPRequestHandler):
             if not name:
                 return self.send_json({"error": "Ugyldigt navn"}, 400)
             return self.send_json({"name": name})
+
+        m = re.fullmatch(r"/api/videos/(\d+)/generate", path)
+        if m:  # beat script for a PMV without one
+            if LIBRARY.generate_state.get("running"):
+                return self.send_json({"error": "Der laves allerede et script"}, 400)
+            LIBRARY.generate_state = {"running": True, "videoId": int(m.group(1)), "error": ""}
+            threading.Thread(target=LIBRARY.generate_script, args=(int(m.group(1)),), daemon=True).start()
+            return self.send_json({"started": True})
 
         m = re.fullmatch(r"/api/videos/(\d+)/rating", path)
         if m:
