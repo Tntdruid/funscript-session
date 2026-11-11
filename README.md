@@ -78,11 +78,10 @@ filer i `sessions\` får samme nye navn.
 2–4 uventede sving per 20 min: ⚡ et kort udbrud (+40%), ⏸ en pludselig pause eller 🔥 et ekstra
 edge (op og så stop). De vises på klip-kortene.
 
-**Stemme-coach:** 🗣 ved afspilleren. Browserens egen stemme (dansk/engelsk) siger korte ting ved
-start, slut på opvarmning, temposkift, pauser, udbrud, finale, sidste minut og ▲▼⏹. Højst hvert
-6. sek (vigtige 2,5 sek); videoens lyd dæmpes, mens den taler. Under Justering vælges stemme, lydstyrke, tempo og tonehøjde,
-og 🔊 afspiller en prøve. Den bedste stemme vælges automatisk: i Microsoft Edge er det de naturlige
-danske stemmer (Christel, kvinde; Jeppe, mand), der lyder langt bedre end Windows' gamle "Helle".
+**Lyd-signaler:** 🔔 ved afspilleren. Korte, diskrete lyde (laves i browseren, intet at hente):
+klokke ved start/slut på opvarmning, sus op/ned ved temposkift, dyb tone ved pause, "zap" ved
+udbrud, stigende tone ved edge, gong ved finale, to tik ved sidste minut og et blip ved ▲▼.
+Højst hvert 4. sek (vigtige 1,5 sek). Lydstyrke og 🔊 prøve under Enheder → Justering.
 
 **Live-styring:** Under afspilning vælger ▲ (eller pil op) hurtigere og ▼ (pil ned) roligere
 kommende klip (±15% per tryk), og ⏹ erstatter resten med ca. 2 min finale. Klippet, der spiller

@@ -8,8 +8,7 @@ const ui = {
   remuxBox: $('remuxBox'), remuxBtn: $('remuxBtn'), remuxStatus: $('remuxStatus'), remuxBar: $('remuxBar'),
   emptyState: $('emptyState'), playBtn: $('playBtn'), prevBtn: $('prevBtn'), nextBtn: $('nextBtn'),
   timeNow: $('timeNow'), timeTotal: $('timeTotal'), clipInfo: $('clipInfo'), volume: $('volume'),
-  levelBtn: $('levelBtn'), voiceBtn: $('voiceBtn'), voiceVol: $('voiceVol'),
-  voiceSelect: $('voiceSelect'), voiceRate: $('voiceRate'), voicePitch: $('voicePitch'),
+  levelBtn: $('levelBtn'), cueBtn: $('cueBtn'), cueVol: $('cueVol'),
   surprises: $('surprises'), surpriseBtn: $('surpriseBtn'), moreBtn: $('moreBtn'), lessBtn: $('lessBtn'), finishBtn: $('finishBtn'),
   liveCanvas: $('liveCanvas'), timelineCanvas: $('timelineCanvas'),
   lengthChips: $('lengthChips'), customMinutes: $('customMinutes'), clipLength: $('clipLength'),
@@ -1153,7 +1152,7 @@ function applyVolume() {
     return;
   }
   players.forEach((p, i) => {
-    const gain = volume * 10 ** (videoGainDb(playerVideoId(p)) / 20) * (coachSpeaking ? 0.45 : 1);
+    const gain = volume * 10 ** (videoGainDb(playerVideoId(p)) / 20);
     audio.gains[i].gain.setTargetAtTime(gain, audio.ctx.currentTime, 0.05);
   });
 }
@@ -1185,7 +1184,7 @@ async function watchAudioMeasuring() {
   }
 }
 
-// ------------------------------------------------------------------ surprise me + voice coach
+// ------------------------------------------------------------------ surprise me + sound cues
 
 const SURPRISE_ICONS = { burst: '⚡', pause: '⏸', edge: '🔥', edge_stop: '⏸' };
 
@@ -1206,89 +1205,103 @@ function surpriseMe() {
   buildSession();
 }
 
-// The coach speaks through the browser's own speech synthesis, in the UI language.
-const COACH_LINES = {
-  start: ['Så går vi i gang.', 'Klar? Vi starter.', 'Læn dig tilbage. Nu begynder det.'],
-  warmupEnd: ['Opvarmningen er slut. Nu starter det.', 'Så er du varm. Nu kører vi.'],
-  faster: ['Lidt hurtigere nu.', 'Tempoet stiger.', 'Op i gear.'],
-  slower: ['Langsommere… slap af.', 'Ned i tempo.', 'Rolig nu.'],
-  pause: ['Hold den… pause.', 'Stop. Træk vejret.', 'Hold igen… ikke endnu.'],
-  burst: ['Overraskelse! Hurtigt nu!', 'Fuld fart!', 'Nu går det stærkt!'],
-  edge: ['Op mod kanten…', 'Tæt på… hold den.', 'Byg op… og hold.'],
-  finale: ['Finale! Giv slip.', 'Sidste stræk. Nu!', 'Her kommer finalen.'],
-  lastMinute: ['Sidste minut.', 'Ét minut tilbage.'],
-  more: ['Mere!', 'Hurtigere, sådan.'],
-  less: ['Roligere.', 'Ned i tempo.'],
-  finish: ['Finale nu!', 'Så slutter vi af.'],
-  end: ['Godt klaret.', 'Det var det. Godt gået.'],
-};
-let coachOn = loadJson('coachOn', false);
+// Sound cues instead of a voice: short, quiet sounds made with Web Audio (nothing to download).
+let coachOn = loadJson('cuesOn', false);
 let lastCoachAt = -Infinity;
-let coachSpeaking = false;
-let coachMarks = {};      // what has been said in this session (start, warm-up, last minute, end)
+let coachMarks = {};      // what has been signalled in this session (start, warm-up, last minute, end)
 let coachClip = -1;
+let cueCtx = null;
 
-/** Voices for the UI language, best first: neural/"Natural" (Edge), then online, then local. */
-function coachVoices() {
-  const wanted = LANG === 'da' ? 'da' : 'en';
-  const quality = (v) => (/natural|neural/i.test(v.name) ? 3 : 0) + (/online|google/i.test(v.name) ? 2 : 0)
-    + (v.localService ? 0 : 1);
-  return speechSynthesis.getVoices()
-    .filter((v) => v.lang.toLowerCase().startsWith(wanted))
-    .sort((a, b) => quality(b) - quality(a) || a.name.localeCompare(b.name));
+function cueContext() {
+  // shares the player's AudioContext once it exists, otherwise makes its own
+  cueCtx = audio?.ctx || cueCtx || new AudioContext();
+  if (cueCtx.state === 'suspended') cueCtx.resume().catch(() => {});
+  return cueCtx;
 }
 
-function coachVoice() {
-  const voices = coachVoices();
-  const chosen = loadJson(`coachVoice-${LANG}`, null);
-  return voices.find((v) => v.name === chosen) || voices[0] || null;
+/** One soft tone: frequency glide `f0 -> f1` over `dur` seconds, starting `at` seconds from now. */
+function tone(ctx, out, { f0, f1 = f0, dur = 0.4, at = 0, type = 'sine', peak = 0.5, attack = 0.01 }) {
+  const t0 = ctx.currentTime + at;
+  const osc = ctx.createOscillator();
+  const env = ctx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(f0, t0);
+  osc.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
+  env.gain.setValueAtTime(0.0001, t0);
+  env.gain.exponentialRampToValueAtTime(peak, t0 + attack);
+  env.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  osc.connect(env).connect(out);
+  osc.start(t0);
+  osc.stop(t0 + dur + 0.05);
 }
 
-function renderVoiceSelect() {
-  const voices = coachVoices();
-  const current = coachVoice();
-  ui.voiceSelect.innerHTML = voices.length
-    ? voices.map((v) => `<option value="${escapeHtml(v.name)}">${escapeHtml(v.name.replace(/^Microsoft /, ''))}</option>`).join('')
-    : `<option value="">${t('Standard')}</option>`;
-  if (current) ui.voiceSelect.value = current.name;
-  // only the old robotic voices? point to Edge's natural ones
-  $('voiceHint').hidden = LANG !== 'da' || voices.some((v) => /natural|neural|online/i.test(v.name));
+/** Filtered noise sweeping up or down: a soft "whoosh". */
+function whoosh(ctx, out, { from, to, dur = 0.6, peak = 0.35 }) {
+  const t0 = ctx.currentTime;
+  const buffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * dur), ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < data.length; i += 1) data[i] = Math.random() * 2 - 1;
+  const noise = ctx.createBufferSource();
+  noise.buffer = buffer;
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.Q.value = 1.2;
+  filter.frequency.setValueAtTime(from, t0);
+  filter.frequency.exponentialRampToValueAtTime(to, t0 + dur);
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(0.0001, t0);
+  env.gain.exponentialRampToValueAtTime(peak, t0 + dur * 0.45);
+  env.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  noise.connect(filter).connect(env).connect(out);
+  noise.start(t0);
 }
 
-function say(event, force = false) {
-  if (!coachOn || !('speechSynthesis' in window)) return;
+const CUES = {
+  start: (c, o) => { tone(c, o, { f0: 523, dur: 0.6 }); tone(c, o, { f0: 784, dur: 0.9, at: 0.18 }); },
+  warmupEnd: (c, o) => { tone(c, o, { f0: 587, dur: 0.6 }); tone(c, o, { f0: 880, dur: 0.9, at: 0.18 }); },
+  faster: (c, o) => whoosh(c, o, { from: 300, to: 2400 }),
+  slower: (c, o) => whoosh(c, o, { from: 2400, to: 300 }),
+  pause: (c, o) => tone(c, o, { f0: 196, dur: 1.6, attack: 0.12, peak: 0.45 }),
+  burst: (c, o) => [0, 0.07, 0.14, 0.21].forEach((at, i) => tone(c, o, { f0: 440 * 1.26 ** i, dur: 0.18, at, type: 'triangle', peak: 0.35 })),
+  edge: (c, o) => tone(c, o, { f0: 220, f1: 660, dur: 1.4, attack: 0.5, type: 'triangle', peak: 0.3 }),
+  finale: (c, o) => [1, 2.76, 5.4].forEach((m, i) => tone(c, o, { f0: 98 * m, dur: 3.2 - i * 0.8, attack: 0.005, peak: 0.45 / (i + 1) })),
+  lastMinute: (c, o) => { tone(c, o, { f0: 1320, dur: 0.08, peak: 0.3 }); tone(c, o, { f0: 1320, dur: 0.08, at: 0.22, peak: 0.3 }); },
+  more: (c, o) => tone(c, o, { f0: 660, f1: 990, dur: 0.16, type: 'triangle', peak: 0.3 }),
+  less: (c, o) => tone(c, o, { f0: 990, f1: 660, dur: 0.16, type: 'triangle', peak: 0.3 }),
+  end: (c, o) => [784, 659, 523].forEach((f, i) => tone(c, o, { f0: f, dur: 0.9, at: i * 0.22 })),
+};
+CUES.finish = CUES.finale;
+
+function cue(event, force = false) {
+  if (!coachOn || !CUES[event]) return;
   const now = performance.now();
-  // never chatter: 6 s between lines, 2.5 s for important ones; answers to ▲▼⏹ come at once
+  // never too busy: 4 s between cues, 1.5 s for important ones; answers to ▲▼⏹ come at once
   const userAction = ['more', 'less', 'finish'].includes(event);
-  if (!userAction && now - lastCoachAt < (force ? 2500 : 6000)) return;
-  const lines = COACH_LINES[event];
-  if (!lines) return;
+  if (!userAction && now - lastCoachAt < (force ? 1500 : 4000)) return;
   lastCoachAt = now;
-  const utterance = new SpeechSynthesisUtterance(t(lines[Math.floor(Math.random() * lines.length)]));
-  const voice = coachVoice();
-  try { if (voice) utterance.voice = voice; } catch { /* keep the browser default */ }
-  utterance.lang = LANG === 'da' ? 'da-DK' : 'en-US';
-  utterance.volume = Number(ui.voiceVol.value);
-  utterance.rate = Number(ui.voiceRate.value);
-  utterance.pitch = Number(ui.voicePitch.value);
-  utterance.onstart = () => { coachSpeaking = true; applyVolume(); };
-  utterance.onend = utterance.onerror = () => { coachSpeaking = false; applyVolume(); };
-  speechSynthesis.cancel();
-  speechSynthesis.speak(utterance);
+  try {
+    const ctx = cueContext();
+    const out = ctx.createGain();
+    out.gain.value = Number(ui.cueVol.value);
+    out.connect(ctx.destination);
+    CUES[event](ctx, out);
+  } catch (err) {
+    console.warn('Lyd-signal fejlede', err);
+  }
 }
 
-/** Called on every tick: speaks on clip changes and on session milestones. */
+/** Called on every tick: a cue on clip changes and on session milestones. */
 function coachTick() {
   const session = state.session;
   if (!coachOn || !session || !state.playing || switching) return;
   const left = session.totalMs - state.sessionTime;
   const warmEnd = warmupEnd();
-  if (!coachMarks.start) { coachMarks.start = true; say('start', true); return; }
+  if (!coachMarks.start) { coachMarks.start = true; cue('start', true); return; }
   if (warmEnd && !coachMarks.warmup && state.sessionTime >= warmEnd) {
-    coachMarks.warmup = true; say('warmupEnd', true); return;
+    coachMarks.warmup = true; cue('warmupEnd', true); return;
   }
   if (!coachMarks.lastMinute && session.totalMs > 180000 && left < 60000 && left > 50000) {
-    coachMarks.lastMinute = true; say('lastMinute', true); return;
+    coachMarks.lastMinute = true; cue('lastMinute', true); return;
   }
   if (state.clipIndex === coachClip) return;
   const prev = session.clips[coachClip];
@@ -1296,20 +1309,19 @@ function coachTick() {
   coachClip = state.clipIndex;
   if (!prev || !clip || clip.warmup) return;
   const base = session.params?.targetSpeed || prev.targetSpeed || 200;
-  if (clip.surprise === 'burst') say('burst', true);
-  else if (clip.surprise === 'edge') say('edge', true);
-  else if (clip.surprise === 'pause' || clip.surprise === 'edge_stop' || clip.targetSpeed < base * 0.55) say('pause');
-  else if (left < 150000 && clip.targetSpeed > base * 1.3) say('finale');
-  else if (clip.targetSpeed > prev.targetSpeed * 1.12) say('faster');
-  else if (clip.targetSpeed < prev.targetSpeed * 0.88) say('slower');
+  if (clip.surprise === 'burst') cue('burst', true);
+  else if (clip.surprise === 'edge') cue('edge', true);
+  else if (clip.surprise === 'pause' || clip.surprise === 'edge_stop' || clip.targetSpeed < base * 0.55) cue('pause');
+  else if (left < 150000 && clip.targetSpeed > base * 1.3) cue('finale');
+  else if (clip.targetSpeed > prev.targetSpeed * 1.12) cue('faster');
+  else if (clip.targetSpeed < prev.targetSpeed * 0.88) cue('slower');
 }
 
 function toggleCoach() {
   coachOn = !coachOn;
-  saveJson('coachOn', coachOn);
-  ui.voiceBtn.classList.toggle('on', coachOn);
-  if (!coachOn && 'speechSynthesis' in window) speechSynthesis.cancel();
-  if (coachOn) { lastCoachAt = -Infinity; say('start', true); }
+  saveJson('cuesOn', coachOn);
+  ui.cueBtn.classList.toggle('on', coachOn);
+  if (coachOn) { lastCoachAt = -Infinity; cue('start', true); }
 }
 
 // ------------------------------------------------------------------ live steering + learning
@@ -1438,7 +1450,7 @@ function tick() {
           goToClip(state.clipIndex + 1);
         } else {
           state.sessionTime = state.session.totalMs;
-          if (!coachMarks.end) { coachMarks.end = true; say('end', true); }
+          if (!coachMarks.end) { coachMarks.end = true; cue('end', true); }
           setPlaying(false);
         }
       }
@@ -1960,36 +1972,25 @@ document.addEventListener('fullscreenchange', () => {
   else videoWrap.classList.remove('show-ui');
 });
 ui.nextBtn.addEventListener('click', nextClip);
-ui.moreBtn.addEventListener('click', () => { say('more', true); steer('more'); });
-ui.lessBtn.addEventListener('click', () => { say('less', true); steer('less'); });
-ui.finishBtn.addEventListener('click', () => { say('finish', true); steer('finish'); });
+ui.moreBtn.addEventListener('click', () => { cue('more', true); steer('more'); });
+ui.lessBtn.addEventListener('click', () => { cue('less', true); steer('less'); });
+ui.finishBtn.addEventListener('click', () => { cue('finish', true); steer('finish'); });
 ui.surpriseBtn.addEventListener('click', surpriseMe);
-ui.voiceBtn.addEventListener('click', toggleCoach);
-ui.voiceBtn.classList.toggle('on', coachOn);
+ui.cueBtn.addEventListener('click', toggleCoach);
+ui.cueBtn.classList.toggle('on', coachOn);
 ui.surprises.checked = loadJson('surprises', false);
 ui.surprises.addEventListener('change', () => saveJson('surprises', ui.surprises.checked));
-ui.voiceVol.value = loadJson('voiceVol', 0.8);
-$('voiceVolLabel').textContent = `${Math.round(ui.voiceVol.value * 100)}%`;
-ui.voiceVol.addEventListener('input', () => {
-  $('voiceVolLabel').textContent = `${Math.round(ui.voiceVol.value * 100)}%`;
-  saveJson('voiceVol', Number(ui.voiceVol.value));
+ui.cueVol.value = loadJson('cueVol', 0.6);
+$('cueVolLabel').textContent = `${Math.round(ui.cueVol.value * 100)}%`;
+ui.cueVol.addEventListener('input', () => {
+  $('cueVolLabel').textContent = `${Math.round(ui.cueVol.value * 100)}%`;
+  saveJson('cueVol', Number(ui.cueVol.value));
 });
-if ('speechSynthesis' in window) {
-  renderVoiceSelect();
-  speechSynthesis.addEventListener('voiceschanged', renderVoiceSelect); // voices load lazily
-}
-ui.voiceSelect.addEventListener('change', () => saveJson(`coachVoice-${LANG}`, ui.voiceSelect.value));
-[['voiceRate', 'voiceRateLabel'], ['voicePitch', 'voicePitchLabel']].forEach(([id, label]) => {
-  ui[id].value = loadJson(id, 1);
-  const show = () => { $(label).textContent = `${Math.round(ui[id].value * 100)}%`; };
-  show();
-  ui[id].addEventListener('input', () => { show(); saveJson(id, Number(ui[id].value)); });
-});
-$('voiceTest').addEventListener('click', () => {
+$('cueTest').addEventListener('click', () => {
   const was = coachOn;
   coachOn = true;
   lastCoachAt = -Infinity;
-  try { say('faster', true); } finally { coachOn = was; }
+  try { cue(['faster', 'pause', 'burst', 'finale'][Math.floor(Math.random() * 4)], true); } finally { coachOn = was; }
 });
 $('forgetBtn').addEventListener('click', forgetTaste);
 ui.prevBtn.addEventListener('click', () => {
