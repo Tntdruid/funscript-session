@@ -226,7 +226,7 @@ function renderLibrary() {
 function makeLibraryRow(v) {
   const usableItem = v.hasScript && v.playable && v.rating >= 0;
   const li = document.createElement('li');
-  li.className = v.rating < 0 ? 'disliked' : (v.hasScript && v.playable ? '' : 'disabled');
+  li.className = (v.rating < 0 ? 'disliked' : (v.hasScript && v.playable ? '' : 'disabled')) + (v.canGenerate ? ' can-gen' : '');
   const reason = !v.playable
     ? (v.needsRemux ? t('MPEG-TS – skal konverteres') : t('kan ikke afspilles i browser'))
     : !v.hasScript ? t('intet script') : v.rating < 0 ? t('fravalgt') : `${Math.round(v.avgSpeed)} u/s`;
@@ -403,7 +403,7 @@ function makeGridCard(v) {
   const usableItem = v.hasScript && v.playable && v.rating >= 0;
   const selected = usableItem && !state.deselected.has(v.id);
   const card = document.createElement('div');
-  card.className = `vcard ${!v.hasScript || !v.playable ? 'disabled' : v.rating < 0 ? 'disliked' : selected ? 'on' : 'off'}`;
+  card.className = `vcard ${!v.hasScript || !v.playable ? 'disabled' : v.rating < 0 ? 'disliked' : selected ? 'on' : 'off'}${v.canGenerate ? ' can-gen' : ''}`;
   const info = !v.playable ? t('kan ikke afspilles') : !v.hasScript ? t('intet script') : `${Math.round(v.avgSpeed)} u/s`;
   card.title = `${v.name}\n${v.path}`;
   card.innerHTML = `

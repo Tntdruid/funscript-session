@@ -82,7 +82,8 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: 
   display: grid; grid-template-columns: auto 44px 1fr auto; gap: 8px; align-items: center;
   padding: 6px 2px; border-bottom: 1px solid var(--line);
 }
-.library li.disabled { opacity: 0.45; }
+.library li.disabled { opacity: 0.6; }
+.library li.disabled.can-gen { opacity: 1; }
 .library li.disliked { opacity: 0.35; }
 .library .thumb {
   width: 44px; height: 44px; object-fit: cover; border-radius: 6px; background: var(--panel-2);
@@ -174,7 +175,7 @@ details.more .toggle { margin: 4px 0 10px; }
 
 /* large picture grid for choosing videos */
 .grid-overlay {
-  position: fixed; inset: 0; z-index: 50; background: rgba(10, 11, 15, 0.97);
+  position: fixed; inset: 0; z-index: 50; background: var(--bg);
   display: flex; flex-direction: column; padding: 18px 22px 10px; gap: 12px;
 }
 .grid-overlay.hidden { display: none; }
@@ -196,7 +197,9 @@ details.more .toggle { margin: 4px 0 10px; }
 .vcard.on { border-color: var(--accent); }
 .vcard.off { opacity: 0.45; }
 .vcard.off:hover { opacity: 0.8; }
-.vcard.disabled { opacity: 0.3; cursor: default; }
+.vcard.disabled { opacity: 0.6; cursor: default; }
+.vcard.disabled.can-gen { opacity: 1; }
+.vcard.disabled .check { display: none; }
 .vcard.disliked { opacity: 0.3; }
 .vcard .poster { position: relative; aspect-ratio: 3 / 4; background: var(--panel-2); }
 .vcard .poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
