@@ -415,16 +415,35 @@ def normalize_line(text):
     return " ".join(re.sub(r"[\W_]+", " ", str(text).lower()).split())
 
 
+GENERATED_DIR = Path(os.environ.get("FUNSCRIPT_GENERATED")
+                     or Path(__file__).resolve().parent / "Genererede scripts")
+OLD_GENERATED_DIR = REMUX_DIR.parent / "generated"  # before: hidden in AppData with hashed names
+
+
 def generated_dir():
-    """Scripts the app made itself (beat scripts for PMVs) - never next to the videos."""
-    folder = REMUX_DIR.parent / "generated"
-    folder.mkdir(parents=True, exist_ok=True)
-    return Path(os.path.realpath(folder))
+    """Scripts the app made itself (beat scripts for PMVs) - in the app folder, never next to
+    the videos. Same folder layout as the library, so X:\PMV\a.mp4 -> X\PMV\a.funscript."""
+    GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+    return Path(os.path.realpath(GENERATED_DIR))
 
 
 def generated_script_path(video_path):
+    p = Path(video_path)
+    parts = [part.replace(":", "").strip("\/") for part in p.parent.parts]
+    return generated_dir().joinpath(*[x for x in parts if x], p.stem + ".funscript")
+
+
+def _old_generated_path(video_path):
     import hashlib
-    return generated_dir() / (hashlib.sha1(str(video_path).encode("utf-8")).hexdigest()[:16] + ".funscript")
+    return Path(os.path.realpath(OLD_GENERATED_DIR)) / (
+        hashlib.sha1(str(video_path).encode("utf-8")).hexdigest()[:16] + ".funscript")
+
+
+def _is_generated(script_path):
+    try:
+        return Path(os.path.realpath(script_path)).is_relative_to(generated_dir())
+    except (OSError, ValueError):
+        return False
 
 
 def can_generate():
@@ -657,6 +676,7 @@ class Library:
         self.scan_state = {"running": False, "done": 0, "total": 0, "message": ""}
         self.audio_state = {"running": False, "done": 0, "total": 0}
         self.generate_state = {"running": False, "videoId": None, "error": ""}
+        self._move_old_generated()
         self.remux_state = {"running": False, "done": 0, "total": 0, "current": "",
                             "progress": 0.0, "failed": [], "error": ""}
 
@@ -825,7 +845,7 @@ class Library:
             "hasVib": bool(row["vib_path"]), "hasVib2": bool(row["vib2_path"]),
             **Library._meta_fields(row["meta"], row["name"]),
             "issues": json.loads(row["issues"] or "[]"),
-            "autoScript": bool(row["script_path"]) and Path(row["script_path"]).parent == generated_dir(),
+            "autoScript": bool(row["script_path"]) and _is_generated(row["script_path"]),
             "loudness": row["audio_db"] if row["audio_db"] is not None and row["audio_db"] > NO_AUDIO else None,
         }
 
@@ -919,22 +939,65 @@ class Library:
         with self.lock, self.conn:
             self.conn.execute("DELETE FROM feedback")
 
+    def _move_old_generated(self):
+        """Scripts made by older versions lived hidden in AppData; move them to the app folder."""
+        if not OLD_GENERATED_DIR.exists():
+            return
+        with self.lock:
+            rows = self.conn.execute("SELECT id, path, script_path FROM videos").fetchall()
+            for row in rows:
+                old = _old_generated_path(row["path"])
+                new = generated_script_path(row["path"])
+                if old.is_file() and not new.exists():  # copied, the old one is left alone
+                    new.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(str(old), str(new))
+                if row["script_path"] and Path(row["script_path"]) == old and new.is_file():
+                    self.conn.execute("UPDATE videos SET script_path=? WHERE id=?", (str(new), row["id"]))
+            self.conn.commit()
+
+    def _generate_one(self, video):
+        """Beat script for one video, written to the app's own folder and scanned in."""
+        import beatgen
+        script = beatgen.generate(video["path"])
+        target = generated_script_path(video["path"])
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(script), encoding="utf-8")
+        self._scan_one(Path(video["path"]))  # picks the new script up and analyses it
+
     def generate_script(self, video_id):
         """Make a beat script for a video without one (runs in a background thread)."""
-        import beatgen
         video = self.video(video_id)
-        self.generate_state = {"running": True, "videoId": video_id, "error": ""}
+        self.generate_state = {"running": True, "videoId": video_id, "error": "",
+                               "done": 0, "total": 1, "current": video["name"] if video else "", "failed": []}
         try:
             if not video:
                 raise RuntimeError("Ukendt video")
-            script = beatgen.generate(video["path"])
-            target = generated_script_path(video["path"])
-            target.write_text(json.dumps(script), encoding="utf-8")
-            self._scan_one(Path(video["path"]))  # picks the new script up and analyses it
+            self._generate_one(video)
+            self.generate_state["done"] = 1
         except Exception as exc:  # reported to the browser
             self.generate_state["error"] = str(exc)
         finally:
             self.generate_state["running"] = False
+
+    def generate_all(self):
+        """Beat scripts for every PMV that has none, one after another; can be stopped."""
+        todo = [v for v in self.videos() if v.get("canGenerate")]
+        state = {"running": True, "videoId": None, "error": "", "done": 0, "total": len(todo),
+                 "current": "", "failed": [], "stop": False, "all": True}
+        self.generate_state = state
+        try:
+            for video in todo:
+                if state["stop"]:
+                    break
+                state["current"], state["videoId"] = video["name"], video["id"]
+                try:
+                    self._generate_one(video)
+                except Exception as exc:  # one bad video doesn't stop the rest
+                    state["failed"].append({"name": video["name"], "error": str(exc)})
+                state["done"] += 1
+        finally:
+            state["running"] = False
+            state["current"] = ""
 
     def set_rating(self, video_id, rating):
         """1 = favourite, -1 = never use in sessions, 0 = neutral."""

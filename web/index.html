@@ -23,6 +23,12 @@
             <button id="scanBtn">Scan</button>
           </div>
           <div class="hint" id="scanStatus">Videoer matches med scripts på filnavn (Video.mp4 → Video.funscript)</div>
+          <div class="remux hidden" id="genAllBox">
+            <div style="display:flex;gap:6px"><button id="genAllBtn" style="flex:1">🎵 Lav scripts til alle PMV'er</button>
+            <button id="genOpenBtn" title="Åbn mappen med de lavede scripts">📂</button></div>
+            <div class="hint" id="genAllStatus"></div>
+            <div class="progress"><div id="genAllBar"></div></div>
+          </div>
           <div class="remux hidden" id="remuxBox">
             <button id="remuxBtn">Konverter MPEG-TS</button>
             <div class="hint" id="remuxStatus"></div>

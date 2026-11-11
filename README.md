@@ -35,9 +35,12 @@ ellers bruges længden af scriptet.
 **Auto-scripts til PMV'er:** PMV'er uden script får knappen "🎵 Lav script". Appen finder musikkens
 beat (librosa, i 30-sekunders stykker, så tempo-skift i kompilationer følges) og laver ét slag per
 beat – bunden på beatet, slaglængde efter musikkens styrke, stille passager står stille. Scriptet
-gemmes i appens egen mappe (aldrig ved siden af videoen) og markeres "auto". Testet mod rigtige
-PMV-scripts: 71–99 % af de automatiske slag lander på et rigtigt slag. Kræver `pip install librosa`;
-uden den vises knappen ikke.
+gemmes i mappen `Genererede scripts` i app-mappen (aldrig ved siden af videoen) med samme
+mappestruktur og navn som videoen – `X:\PMV.mp4` → `Genererede scripts\X\PMV.funscript` – så de
+kan kopieres over til videoen hvis man vil bruge dem i andre players. De markeres "auto". Under
+Bibliotek laver "🎵 Lav scripts til alle PMV'er (N)" scripts til dem alle i baggrunden (med
+fremskridt og Stop), og 📂 åbner mappen. Testet mod rigtige PMV-scripts: 71–99 % af de automatiske
+slag lander på et rigtigt slag. Kræver `pip install librosa`; uden den vises knapperne ikke.
 3. Klippene lægges efter hinanden og der samles ét funscript for hele sessionen, som gemmes
    i databasen og kan downloades som `.funscript`.
 4. Afspilleren skifter sømløst mellem klip (næste klip forudindlæses) og styrer en enhed via

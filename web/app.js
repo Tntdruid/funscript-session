@@ -151,6 +151,7 @@ async function loadLibrary(remuxStatus = null) {
   renderCategories();
   renderLibrary();
   renderRemux(remuxStatus);
+  if (!genAllPolling) renderGenAll();
   updateSpeedLabel();
 }
 
@@ -311,6 +312,64 @@ document.addEventListener('click', (e) => {
   e.stopPropagation();
   generateScript(Number(button.dataset.gen), button);
 }, true);
+
+
+// "Make scripts for all PMVs": a background job on the server, one video at a time.
+let genAllPolling = false;
+
+function renderGenAll(status = null) {
+  const waiting = state.library.filter((v) => v.canGenerate).length;
+  const running = status?.running && status?.all;
+  $('genAllBox').classList.toggle('hidden', !waiting && !running && !status?.all);
+  const button = $('genAllBtn');
+  button.textContent = running ? `⏹ ${t('Stop')}` : `🎵 ${t("Lav scripts til alle PMV'er ({n})", { n: waiting })}`;
+  button.disabled = !running && !waiting;
+  const done = status?.done || 0;
+  const total = status?.total || 0;
+  if (running) {
+    $('genAllStatus').textContent = t('Laver script {a}/{b}: {name}', { a: done + 1, b: total, name: status.current || '…' });
+  } else if (status?.all) {
+    const failed = status.failed || [];
+    $('genAllStatus').textContent = t('{n} scripts lavet', { n: done - failed.length })
+      + (failed.length ? ` · ${t('{n} fejlede', { n: failed.length })}` : '');
+    $('genAllStatus').title = failed.map((f) => `${f.name}: ${f.error}`).join('\n');
+  } else {
+    $('genAllStatus').textContent = t('Gemmes i mappen "Genererede scripts" i app-mappen, ikke ved videoerne. Tager ca. 1 sek per minut video.');
+  }
+  $('genAllBar').style.width = total ? `${(done / total) * 100}%` : '0';
+}
+
+async function pollGenAll() {
+  if (genAllPolling) return;
+  genAllPolling = true;
+  try {
+    let lastDone = -1;
+    for (;;) {
+      const status = await api('/api/generate/status');
+      renderGenAll(status);
+      if (status.done !== lastDone && lastDone >= 0) await loadLibrary(); // new scripts show up as they come
+      lastDone = status.done;
+      if (!status.running) { await loadLibrary(); renderGenAll(status); break; }
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+  } finally {
+    genAllPolling = false;
+  }
+}
+
+async function toggleGenAll() {
+  const status = await api('/api/generate/status');
+  if (status.running && status.all) {
+    await api('/api/generate/stop', { method: 'POST', body: {} });
+    return;
+  }
+  try {
+    await api('/api/generate/all', { method: 'POST', body: {} });
+    pollGenAll();
+  } catch (err) {
+    $('genAllStatus').textContent = err.message;
+  }
+}
 
 // ------------------------------------------------------------------ picture grid
 
@@ -1982,6 +2041,8 @@ function checkHandyDrift(threshold = 250, minGap = 2000) {
 // ------------------------------------------------------------------ events
 
 ui.scanBtn.addEventListener('click', scanLibrary);
+$('genAllBtn').addEventListener('click', toggleGenAll);
+$('genOpenBtn').addEventListener('click', () => api('/api/generate/open', { method: 'POST', body: {} }).catch((e) => alert(e.message)));
 resumeUi.yes.addEventListener('click', resumeSession);
 resumeUi.no.addEventListener('click', dismissResume);
 window.addEventListener('pagehide', () => savePosition(true));
@@ -2189,6 +2250,7 @@ window.addEventListener('resize', () => { envelope = null; });
     await loadSettings();
     await Promise.all([loadLibrary(), loadSessions()]);
     offerResume();
+    api('/api/generate/status').then((s) => { if (s.running && s.all) pollGenAll(); }).catch(() => {});
     watchAudioMeasuring();
     applyVolume();
     api('/api/remux/status').then((s) => { if (s.running) pollRemux(); }).catch(() => {});

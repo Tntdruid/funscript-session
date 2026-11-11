@@ -183,6 +183,14 @@ const EN = {
   'Upload af script til Handy fejlede': 'Uploading the script to Handy failed',
 
   // ---- beat scripts
+  "Lav scripts til alle PMV'er ({n})": 'Make scripts for all PMVs ({n})',
+  'Stop': 'Stop',
+  'Laver script {a}/{b}: {name}': 'Making script {a}/{b}: {name}',
+  '{n} scripts lavet': '{n} scripts made',
+  '{n} fejlede': '{n} failed',
+  'Gemmes i mappen "Genererede scripts" i app-mappen, ikke ved videoerne. Tager ca. 1 sek per minut video.':
+    'Saved in the "Genererede scripts" folder in the app folder, not next to the videos. Takes about 1 s per minute of video.',
+  'Åbn mappen med de lavede scripts': 'Open the folder with the made scripts',
   'Lav script': 'Make script',
   'Laver script…': 'Making script…',
   'Lav et script ud fra musikkens beat (tager ca. 10–60 sek)': "Make a script from the music's beat (takes about 10–60 s)",

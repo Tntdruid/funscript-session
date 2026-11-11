@@ -9,7 +9,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlparse
 
-from funlib import (Library, remux_dir, build_session, session_funscript, rebuild_session,
+from funlib import (Library, remux_dir, generated_dir, build_session, session_funscript, rebuild_session,
                     find_replacement, steer_session, scan_voice_folder, voice_dir)
 
 ROOT = Path(__file__).resolve().parent
@@ -136,7 +136,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.wfile.write(body)
             return
         if path == "/api/generate/status":
-            return self.send_json(LIBRARY.generate_state)
+            return self.send_json({**LIBRARY.generate_state, "folder": str(generated_dir())})
         if path == "/api/audio/status":
             return self.send_json(LIBRARY.audio_state)
         if path == "/api/scan/status":
@@ -359,6 +359,19 @@ class Handler(SimpleHTTPRequestHandler):
             if not name:
                 return self.send_json({"error": "Ugyldigt navn"}, 400)
             return self.send_json({"name": name})
+
+        if path == "/api/generate/all":  # beat scripts for every PMV without one
+            if LIBRARY.generate_state.get("running"):
+                return self.send_json({"error": "Der laves allerede et script"}, 400)
+            LIBRARY.generate_state = {"running": True, "done": 0, "total": 0, "failed": [], "error": ""}
+            threading.Thread(target=LIBRARY.generate_all, daemon=True).start()
+            return self.send_json({"started": True})
+        if path == "/api/generate/open":  # show the folder in Explorer
+            os.startfile(str(generated_dir()))
+            return self.send_json({"ok": True})
+        if path == "/api/generate/stop":
+            LIBRARY.generate_state["stop"] = True
+            return self.send_json({"ok": True})
 
         m = re.fullmatch(r"/api/videos/(\d+)/generate", path)
         if m:  # beat script for a PMV without one
