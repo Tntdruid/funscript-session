@@ -154,8 +154,12 @@ ekstrem hastighed eller meget stilstand.
 **Forhåndsvisning:** Hold musen over et kort i gitteret – videoen spiller lydløst og springer
 gennem fire steder; en hvid markør på hastighedskurven viser hvor.
 
+**Rediger metadata:** ✎ på et billede i det store overblik åbner en editor til titel, skuespillere,
+genrer, studie og år. Rettelserne gemmes i appens database og overlever en ny scanning; .nfo-filerne
+bliver aldrig ændret. "Nulstil til .nfo" fjerner rettelserne igen.
+
 **Stort overblik:** "⊞ Vis store billeder" åbner et gitter med store billeder, titler, skuespillere og
-år fra Jellyfin-`.nfo`-filerne. Søg i titel/skuespiller/genre/studie, filtrér på genre og kategori,
+år fra Jellyfin-`.nfo`-filerne. Søg i titel/skuespiller/genre/studie, filtrér på genre, skuespiller og kategori,
 sortér (navn, favoritter, hastighed, længde, mindst afspillet), og klik på et billede for at vælge
 det til/fra sessioner. ★/👎 kan sættes direkte på kortet. Esc lukker.
 

@@ -738,7 +738,8 @@ class Library:
                              ("vib_path", "TEXT"), ("vib2_path", "TEXT"), ("meta", "TEXT"),
                              ("issues", "TEXT"), ("audio_db", "REAL"),
                              ("amps", "TEXT"), ("rates", "TEXT"),
-                             ("orig_path", "TEXT"), ("use_auto", "INTEGER DEFAULT 0")):
+                             ("orig_path", "TEXT"), ("use_auto", "INTEGER DEFAULT 0"),
+                             ("meta_edit", "TEXT")):
             if column not in columns:  # added after the first release
                 self.conn.execute(f"ALTER TABLE videos ADD COLUMN {column} {kind}")
         if "vib" not in {r["name"] for r in self.conn.execute("PRAGMA table_info(sessions)")}:
@@ -930,7 +931,8 @@ class Library:
             "rating": row["rating"] or 0,
             "hasVib": bool(row["vib_path"]), "hasVib2": bool(row["vib2_path"]),
             "autoVib": bool(row["vib_path"]) and _is_generated(row["vib_path"]),
-            **Library._meta_fields(row["meta"], row["name"]),
+            **Library._meta_fields(row["meta"], row["name"], row["meta_edit"]),
+            "metaEdited": bool(row["meta_edit"]),
             "issues": json.loads(row["issues"] or "[]"),
             "autoScript": bool(row["script_path"]) and _is_generated(row["script_path"]),
             "hasOriginal": bool(row["orig_path"]) or (bool(row["script_path"]) and not _is_generated(row["script_path"])),
@@ -938,8 +940,11 @@ class Library:
         }
 
     @staticmethod
-    def _meta_fields(raw, fallback_title):
+    def _meta_fields(raw, fallback_title, edited=None):
+        """Metadata from the .nfo, with the user's own edits (stored in the DB) on top."""
         meta = json.loads(raw) if raw else {}
+        if edited:
+            meta.update(json.loads(edited))
         return {
             "title": meta.get("title") or fallback_title,
             "genres": meta.get("genres", []), "actors": meta.get("actors", []),
@@ -1134,6 +1139,30 @@ class Library:
         finally:
             state["running"] = False
             state["current"] = ""
+
+    def set_meta(self, video_id, data):
+        """Save edited metadata (title, actors, genres, studio, year) in the database; the .nfo
+        files are never written. reset=True goes back to what the .nfo says."""
+        if data.get("reset"):
+            edited = None
+        else:
+            def names(value):
+                items = value.split(",") if isinstance(value, str) else (value or [])
+                out = []
+                for item in items:
+                    item = " ".join(str(item).split())[:100]
+                    if item and item.lower() not in {x.lower() for x in out}:
+                        out.append(item)
+                return out[:50]
+            edited = json.dumps({
+                "title": " ".join(str(data.get("title", "")).split())[:200],
+                "actors": names(data.get("actors")), "genres": names(data.get("genres")),
+                "studio": " ".join(str(data.get("studio", "")).split())[:100],
+                "year": str(data.get("year", "")).strip()[:4],
+            }, ensure_ascii=False)
+        with self.lock, self.conn:
+            self.conn.execute("UPDATE videos SET meta_edit=? WHERE id=?", (edited, video_id))
+        return self.video(video_id)
 
     def set_rating(self, video_id, rating):
         """1 = favourite, -1 = never use in sessions, 0 = neutral."""

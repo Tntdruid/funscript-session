@@ -431,6 +431,7 @@ const grid = {
   overlay: $('gridOverlay'), list: $('gridList'), search: $('gridSearch'), sort: $('gridSort'),
   all: $('gridAll'), usableOnly: $('gridUsableOnly'), close: $('gridClose'),
   count: $('gridCount'), categories: $('gridCategories'), genre: $('gridGenre'),
+  actor: $('gridActor'),
 };
 
 function gridOpen() {
@@ -440,6 +441,7 @@ function gridOpen() {
 function openGrid() {
   grid.overlay.classList.remove('hidden');
   renderGenreOptions();
+  renderActorOptions();
   renderGrid();
   grid.search.focus();
 }
@@ -469,17 +471,24 @@ function searchText(v) {
 function gridItems() {
   const words = grid.search.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const genre = grid.genre.value.toLowerCase();
+  const actor = grid.actor.value.toLowerCase();
   return state.library
     .filter((v) => inCategory(v) && (!grid.usableOnly.checked || (v.hasScript && v.playable)))
     .filter((v) => !genre || v.genres.some((g) => g.toLowerCase() === genre))
+    .filter((v) => !actor || v.actors.some((a) => a.toLowerCase() === actor))
     .filter((v) => { const text = searchText(v); return words.every((w) => text.includes(w)); })
     .sort(GRID_SORTS[grid.sort.value] || GRID_SORTS.name);
 }
 
 /** Genre dropdown from the .nfo files ("Handy" is on nearly everything, so it is left out). */
+/** Videos the dropdown counts cover: same as shown with "skjul uden script". */
+function gridBase() {
+  return state.library.filter((v) => !grid.usableOnly.checked || (v.hasScript && v.playable));
+}
+
 function renderGenreOptions() {
   const counts = new Map();
-  state.library.forEach((v) => v.genres.forEach((g) => {
+  gridBase().forEach((v) => v.genres.forEach((g) => {
     const key = g.toLowerCase();
     if (key !== 'handy') counts.set(key, { name: g, n: (counts.get(key)?.n || 0) + 1 });
   }));
@@ -490,6 +499,71 @@ function renderGenreOptions() {
     + options.map((g) => `<option value="${escapeHtml(g.name)}">${escapeHtml(g.name)} (${g.n})</option>`).join('');
   grid.genre.value = options.some((g) => g.name === current) ? current : '';
 }
+
+/** Actor dropdown from the metadata, alphabetical, with how many videos each is in. */
+function actorCounts() {
+  const counts = new Map();
+  gridBase().forEach((v) => v.actors.forEach((a) => {
+    const key = a.toLowerCase();
+    counts.set(key, { name: counts.get(key)?.name || a, n: (counts.get(key)?.n || 0) + 1 });
+  }));
+  return [...counts.values()].sort((a, b) => a.name.localeCompare(b.name, LANG, { sensitivity: 'base' }));
+}
+
+function renderActorOptions() {
+  const current = grid.actor.value;
+  const options = actorCounts();
+  grid.actor.innerHTML = `<option value="">${t('Alle skuespillere')} (${options.length})</option>`
+    + options.map((a) => `<option value="${escapeHtml(a.name)}">${escapeHtml(a.name)} (${a.n})</option>`).join('');
+  grid.actor.value = options.some((a) => a.name === current) ? current : '';
+}
+
+// ------------------------------------------------------------------ metadata editor
+const meta = {
+  dialog: $('metaDialog'), form: $('metaForm'), file: $('metaFile'), title: $('metaTitle'),
+  actors: $('metaActors'), genres: $('metaGenres'), studio: $('metaStudio'), year: $('metaYear'),
+  list: $('metaActorList'), video: null,
+};
+
+function openMetaEditor(v) {
+  meta.video = v;
+  meta.file.textContent = v.path;
+  meta.title.value = v.title || '';
+  meta.actors.value = v.actors.join(', ');
+  meta.genres.value = v.genres.join(', ');
+  meta.studio.value = v.studio || '';
+  meta.year.value = v.year || '';
+  $('metaReset').disabled = !v.metaEdited;
+  meta.list.innerHTML = actorCounts().map((a) => `<option value="${escapeHtml(a.name)}"></option>`).join('');
+  meta.dialog.showModal();
+  meta.title.focus();
+}
+
+async function saveMeta(body) {
+  const v = meta.video;
+  try {
+    const { video } = await api(`/api/videos/${v.id}/meta`, { method: 'POST', body });
+    const i = state.library.findIndex((x) => x.id === v.id);
+    if (i >= 0) state.library[i] = { ...state.library[i], ...video };
+    meta.dialog.close();
+    renderGenreOptions();
+    renderActorOptions();
+    renderGrid();
+    renderLibrary();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+meta.form.addEventListener('submit', (e) => {
+  e.preventDefault();
+  saveMeta({
+    title: meta.title.value, actors: meta.actors.value, genres: meta.genres.value,
+    studio: meta.studio.value, year: meta.year.value,
+  });
+});
+$('metaCancel').addEventListener('click', () => meta.dialog.close());
+$('metaReset').addEventListener('click', () => saveMeta({ reset: true }));
 
 function updateGridCount() {
   const usable = usableVideos();
@@ -526,12 +600,13 @@ function makeGridCard(v) {
       <div class="rate">
         <button class="fav ${v.rating > 0 ? 'on' : ''}" title="${t('Favorit')}">${v.rating > 0 ? '★' : '☆'}</button>
         <button class="nope ${v.rating < 0 ? 'on' : ''}" title="${t('Brug aldrig')}">👎</button>
+        <button class="edit" title="${t('Rediger metadata')}">✎</button>
       </div>
       <span class="dur">${fmtTime(v.durationMs)}</span>
     </div>
     <div class="cinfo">
       <div class="cname">${escapeHtml(v.title)}</div>
-      <div class="cpeople">${escapeHtml([v.actors.slice(0, 2).join(', '), v.year].filter(Boolean).join(' · '))}</div>
+      <div class="cpeople">${escapeHtml([v.actors.slice(0, 2).join(', '), v.year].filter(Boolean).join(' · '))}${v.metaEdited ? ` <span class="edited-badge" title="${t('Metadata er rettet i appen')}">✎</span>` : ''}</div>
       <div class="cmeta">${v.canGenerate ? genButton(v) : `<span>${info}</span>`}${autoBadge(v)}${v.taste > 0.3 ? `<span class="liked" title="${t('Lært: du ser den ofte færdig')}">♥</span>` : ''}${issueBadge(v)}${vibBadge(v)}<span>${escapeHtml(t(v.category))}</span></div>
       <div class="spark-wrap"><canvas data-id="${v.id}"></canvas><span class="spark-pos" hidden></span></div>
     </div>`;
@@ -551,6 +626,10 @@ function makeGridCard(v) {
     if (state.deselected.has(v.id)) state.deselected.delete(v.id); else state.deselected.add(v.id);
     saveJson('deselected', [...state.deselected]);
     refreshGridCard(card, v);
+  });
+  card.querySelector('.edit').addEventListener('click', (e) => {
+    e.stopPropagation();
+    openMetaEditor(v);
   });
   card.querySelector('.fav').addEventListener('click', (e) => {
     e.stopPropagation();
@@ -2119,9 +2198,10 @@ $('gridBtn').addEventListener('click', openGrid);
 grid.close.addEventListener('click', closeGrid);
 grid.search.addEventListener('input', renderGrid);
 grid.genre.addEventListener('change', renderGrid);
+grid.actor.addEventListener('change', renderGrid);
 grid.sort.value = loadJson('gridSort', 'name');
 grid.sort.addEventListener('change', () => { saveJson('gridSort', grid.sort.value); renderGrid(); });
-grid.usableOnly.addEventListener('change', renderGrid);
+grid.usableOnly.addEventListener('change', () => { renderGenreOptions(); renderActorOptions(); renderGrid(); });
 grid.all.addEventListener('change', () => {
   usableVideos().forEach((v) => (grid.all.checked ? state.deselected.delete(v.id) : state.deselected.add(v.id)));
   saveJson('deselected', [...state.deselected]);
@@ -2275,6 +2355,7 @@ ui.offsetSlider.addEventListener('change', handySync);
 }));
 
 document.addEventListener('keydown', (e) => {
+  if (meta.dialog.open) return; // the dialog handles its own keys (Esc closes it)
   if (gridOpen()) {
     if (e.code === 'Escape') closeGrid();
     return;

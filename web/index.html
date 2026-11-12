@@ -270,6 +270,7 @@
         <h2>Vælg videoer <span class="count" id="gridCount"></span></h2>
         <input id="gridSearch" type="search" placeholder="Søg titel, skuespiller, genre…" spellcheck="false" />
         <select id="gridGenre" title="Genre"><option value="">Alle genrer</option></select>
+        <select id="gridActor" title="Skuespiller"><option value="">Alle skuespillere</option></select>
         <select id="gridSort" title="Sortering">
           <option value="name">Navn</option>
           <option value="rating">Favoritter først</option>
@@ -289,6 +290,28 @@
       <div class="grid" id="gridList"></div>
       <div class="grid-hint">Klik på et billede for at vælge/fravælge det til sessioner · ★ = favorit · 👎 = brug aldrig · Esc lukker</div>
     </div>
+    <dialog class="meta-dialog" id="metaDialog">
+      <form method="dialog" id="metaForm">
+        <h3>Rediger metadata</h3>
+        <div class="hint" id="metaFile"></div>
+        <label>Titel <input id="metaTitle" type="text" maxlength="200" /></label>
+        <label>Skuespillere <span class="hint">(adskil med komma)</span>
+          <input id="metaActors" type="text" list="metaActorList" /></label>
+        <datalist id="metaActorList"></datalist>
+        <label>Genrer <span class="hint">(adskil med komma)</span> <input id="metaGenres" type="text" /></label>
+        <div class="meta-row">
+          <label>Studie <input id="metaStudio" type="text" maxlength="100" /></label>
+          <label>År <input id="metaYear" type="text" inputmode="numeric" maxlength="4" /></label>
+        </div>
+        <div class="hint">Gemmes i appens database. .nfo-filerne bliver ikke ændret.</div>
+        <div class="meta-buttons">
+          <button type="button" id="metaReset" title="Brug det der står i .nfo-filen igen">Nulstil til .nfo</button>
+          <span class="spacer"></span>
+          <button type="button" id="metaCancel">Annullér</button>
+          <button type="submit" class="primary" id="metaSave">Gem</button>
+        </div>
+      </form>
+    </dialog>
     <script src="i18n.js"></script>
     <script src="handy.js"></script>
     <script src="app.js"></script>

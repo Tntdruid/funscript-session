@@ -391,6 +391,13 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.send_json({"error": str(exc)}, 400)
             return self.send_json({"video": video})
 
+        m = re.fullmatch(r"/api/videos/(\d+)/meta", path)
+        if m:  # edited title/actors/genres/... (stored in the DB, the .nfo is never written)
+            video = LIBRARY.set_meta(int(m.group(1)), data)
+            if not video:
+                return self.send_json({"error": "Ukendt video"}, 404)
+            return self.send_json({"video": video})
+
         m = re.fullmatch(r"/api/videos/(\d+)/rating", path)
         if m:
             try:

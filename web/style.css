@@ -182,7 +182,19 @@ details.more .toggle { margin: 4px 0 10px; }
 .grid-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .grid-head h2 { margin: 0 8px 0 0; font-size: 16px; color: var(--text); text-transform: none; letter-spacing: 0; }
 .grid-head input[type="search"] { width: 260px; }
-.grid-head select { width: auto; }
+.grid-head select { width: auto; max-width: 220px; }
+.vcard .rate button.edit { font-size: 13px; }
+.meta-dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 14px;
+  padding: 20px; width: min(520px, calc(100vw - 32px)); }
+.meta-dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
+.meta-dialog h3 { margin: 0 0 4px; font-size: 16px; }
+.meta-dialog label { display: block; margin-top: 12px; font-size: 13px; color: var(--muted); }
+.meta-dialog input { width: 100%; margin-top: 4px; }
+.meta-dialog .meta-row { display: grid; grid-template-columns: 1fr 90px; gap: 10px; }
+.meta-dialog .hint { margin-top: 6px; word-break: break-all; }
+.meta-dialog .meta-buttons { display: flex; gap: 8px; margin-top: 18px; }
+.meta-dialog .spacer { flex: 1; }
+.edited-badge { font-size: 10px; color: var(--muted); }
 .grid-head #gridClose { margin-left: auto; padding: 8px 22px; }
 .grid-cats { max-height: 64px; overflow-y: auto; }
 .grid {
