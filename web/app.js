@@ -260,6 +260,7 @@ function makeLibraryRow(v) {
 }
 
 async function rateVideo(v, rating, li) {
+  const before = v.rating;
   try {
     const res = await api(`/api/videos/${v.id}/rating`, { method: 'POST', body: { rating } });
     v.rating = res.rating;
@@ -273,6 +274,9 @@ async function rateVideo(v, rating, li) {
   ui.libraryCount.textContent = `${usableVideos().length}/${state.library.filter(inCategory).length}`;
   renderCategories();
   updateSpeedLabel();
+  if (rating < 0) {
+    showToast(t('"{name}" bruges aldrig i sessioner', { name: v.title }), { undo: () => rateVideo(v, before, row) });
+  }
 }
 
 // ------------------------------------------------------------------ beat scripts for PMVs
@@ -593,6 +597,7 @@ function makeGridCard(v) {
   card.className = `vcard ${!v.hasScript || !v.playable ? 'disabled' : v.rating < 0 ? 'disliked' : selected ? 'on' : 'off'}${v.canGenerate ? ' can-gen' : ''}`;
   const info = !v.playable ? t('kan ikke afspilles') : !v.hasScript ? t('intet script') : `${Math.round(v.avgSpeed)} u/s`;
   card.title = `${v.name}\n${v.path}`;
+  card.dataset.card = v.id;
   card.innerHTML = `
     <div class="poster">
       <img loading="lazy" alt="" src="/thumb/${v.id}?h=420" />
@@ -694,6 +699,7 @@ function refreshGridCard(card, v) {
 }
 
 async function setGridRating(v, rating, card) {
+  const before = v.rating;
   try {
     v.rating = (await api(`/api/videos/${v.id}/rating`, { method: 'POST', body: { rating } })).rating;
   } catch (err) {
@@ -702,6 +708,11 @@ async function setGridRating(v, rating, card) {
   }
   refreshGridCard(card, v);
   renderCategories();
+  if (rating < 0) {
+    showToast(t('"{name}" bruges aldrig i sessioner', { name: v.title }), {
+      undo: () => setGridRating(v, before, grid.list.querySelector(`[data-card="${v.id}"]`) || card),
+    });
+  }
 }
 
 /** Script problems found by the scan, as readable sentences. */
@@ -920,10 +931,12 @@ async function loadSessions() {
         try { await renameSession(s.id, name); } catch (err) { alert(err.message); }
       }
     });
-    li.querySelector('.del').addEventListener('click', async () => {
-      if (!confirm(t('Slet "{name}"?', { name: s.name }))) return;
-      await api(`/api/sessions/${s.id}`, { method: 'DELETE' });
-      loadSessions();
+    li.querySelector('.del').addEventListener('click', () => {
+      li.hidden = true;  // gone at once, but only deleted when the message goes away without Fortryd
+      showToast(t('"{name}" er slettet', { name: s.name }), {
+        undo: () => { li.hidden = false; },
+        onTimeout: () => api(`/api/sessions/${s.id}`, { method: 'DELETE' }).then(loadSessions).catch(() => {}),
+      });
     });
     ui.sessionList.appendChild(li);
   });
@@ -1711,11 +1724,15 @@ async function steer(mode) {
   }
 }
 
-async function forgetTaste() {
-  if (!confirm(t('Glem alt hvad appen har lært om, hvad du kan lide?'))) return;
-  await api('/api/feedback/reset', { method: 'POST', body: {} });
-  await loadLibrary();
-  renderGrid();
+function forgetTaste() {
+  showToast(t('Appen glemmer, hvad den har lært om, hvad du kan lide'), {
+    undo: () => {},
+    onTimeout: async () => {
+      await api('/api/feedback/reset', { method: 'POST', body: {} });
+      await loadLibrary();
+      renderGrid();
+    },
+  });
 }
 
 // ------------------------------------------------------------------ fullscreen
@@ -1972,6 +1989,7 @@ function renderBpDevices() {
 
 async function toggleDevice() {
   if (bpClient) {
+    saveJson('autoIntiface', false);
     try { await bpClient.disconnect(); } catch { /* ignore */ }
     bpClient = null;
     bpDevices = [];
@@ -1999,6 +2017,7 @@ async function toggleDevice() {
     });
     await bpClient.connect(new bp.ButtplugBrowserWebsocketClientConnector(ui.intifaceUrl.value.trim()));
     ui.connectBtn.textContent = t('Afbryd');
+    saveJson('autoIntiface', true);
     bpDevices = [...bpClient.devices];
     renderBpDevices();
     await bpClient.startScanning();
@@ -2072,6 +2091,7 @@ function showHandyConnected(on) {
 async function toggleHandy() {
   if (Handy.connected) {
     Handy.disconnect();
+    saveJson('autoHandy', false);
     showHandyConnected(false);
     ui.handyConnectBtn.textContent = t('Forbind');
     setDeviceState(t('Ikke forbundet'));
@@ -2086,6 +2106,7 @@ async function toggleHandy() {
       localStorage.setItem('handyKey', ui.handyKey.value.trim());
     } catch { /* ignore */ }
     ui.handyConnectBtn.textContent = t('Afbryd');
+    saveJson('autoHandy', true);
     setDeviceState(t('Handy forbundet'), true);
     showHandyConnected(true);
     Handy.setRange(Number(ui.rangeMin.value), Number(ui.rangeMax.value)).catch(() => {});
@@ -2541,6 +2562,126 @@ $('calibDone').addEventListener('click', () => closeCalib(true));
 $('calibCancel').addEventListener('click', () => closeCalib(false));
 $('holdBtn').addEventListener('click', () => toggleHold());
 
+// ------------------------------------------------------------------ toast with "Fortryd"
+let toastTimer = null;
+let toastDone = null;
+
+/** A short message at the bottom; with `undo` it has a Fortryd button. `onTimeout` runs when it
+ *  goes away without being undone (used to delay deletions until the user had a chance). */
+function showToast(text, { undo = null, onTimeout = null, ms = 6000 } = {}) {
+  finishToast();  // a previous delayed action happens now
+  $('toastText').textContent = text;
+  $('toastUndo').hidden = !undo;
+  $('toast').classList.remove('hidden');
+  toastDone = { undo, onTimeout };
+  toastTimer = setTimeout(finishToast, ms);
+}
+
+function finishToast(undone = false) {
+  clearTimeout(toastTimer);
+  const done = toastDone;
+  toastDone = null;
+  $('toast').classList.add('hidden');
+  if (!done) return;
+  if (undone) done.undo?.();
+  else done.onTimeout?.();
+}
+
+$('toastUndo').addEventListener('click', () => finishToast(true));
+window.addEventListener('beforeunload', () => finishToast());  // a pending deletion still happens
+
+// ------------------------------------------------------------------ saved set-ups (presets)
+const PRESET_FIELDS = ['minutes', 'custom', 'curve', 'speed', 'maxSpeed', 'clip', 'warmup', 'surprises', 'smooth',
+  'onlyFavs', 'vibMode', 'categories'];
+
+function currentSetup() {
+  return {
+    minutes: state.minutes, custom: Number(ui.customMinutes.value) || 0, curve: state.curve,
+    speed: Number(ui.speedSlider.value), maxSpeed: Number(ui.maxSpeedSlider.value), clip: ui.clipLength.value,
+    warmup: Number(ui.warmupSlider.value), surprises: ui.surprises.checked, smooth: ui.smooth.checked,
+    onlyFavs: !!state.onlyFavs, vibMode: ui.vibMode.value, categories: [...state.categories],
+  };
+}
+
+function setupName(p) {
+  const minutes = p.custom || p.minutes;
+  const curve = ui.curveChips.querySelector(`[data-v="${p.curve}"]`)?.textContent || p.curve;
+  const cats = p.categories.length ? ` · ${p.categories.map((c) => t(c)).join(', ')}` : '';
+  return `${minutes} min · ${curve.trim()}${cats}`;
+}
+
+function applySetup(p) {
+  const chip = ui.lengthChips.querySelector(`[data-v="${p.minutes}"]`);
+  if (chip) chip.click();
+  ui.customMinutes.value = p.custom || '';
+  if (p.custom) setChip(ui.lengthChips, null);
+  ui.curveChips.querySelector(`[data-v="${p.curve}"]`)?.click();
+  ui.speedSlider.value = p.speed;
+  updateSpeedLabel();
+  ui.maxSpeedSlider.value = p.maxSpeed;
+  ui.maxSpeedSlider.dispatchEvent(new Event('input'));
+  ui.clipLength.value = p.clip;
+  ui.warmupSlider.value = p.warmup;
+  ui.warmupSlider.dispatchEvent(new Event('input'));
+  [[ui.surprises, p.surprises], [ui.smooth, p.smooth], [$('onlyFavs'), p.onlyFavs]].forEach(([box, on]) => {
+    if (box.checked !== !!on) { box.checked = !!on; box.dispatchEvent(new Event('change')); }
+  });
+  ui.vibMode.value = p.vibMode;
+  ui.vibMode.dispatchEvent(new Event('change'));
+  setCategories(p.categories.filter((c) => state.library.some((v) => videoCats(v).includes(c))));
+}
+
+function renderPresets() {
+  const list = loadJson('presets', []);
+  const box = $('presets');
+  box.innerHTML = '';
+  list.forEach((p, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'preset';
+    chip.innerHTML = `<button class="go" title="${t('Byg med denne opsætning')}">▶ ${escapeHtml(p.name)}</button>`
+      + `<button class="x" title="${t('Fjern')}">✕</button>`;
+    chip.querySelector('.go').addEventListener('click', () => { applySetup(p); buildSession(); });
+    chip.querySelector('.x').addEventListener('click', () => {
+      const all = loadJson('presets', []);
+      all.splice(i, 1);
+      saveJson('presets', all);
+      renderPresets();
+      showToast(t('Opsætningen "{name}" er fjernet', { name: p.name }), {
+        undo: () => { const back = loadJson('presets', []); back.splice(i, 0, p); saveJson('presets', back); renderPresets(); },
+      });
+    });
+    box.appendChild(chip);
+  });
+  const add = document.createElement('span');
+  add.className = 'preset add';
+  add.innerHTML = `<button title="${t('Gem dine valg herover som en knap, der bygger med ét tryk')}">＋ ${t('Gem opsætning')}</button>`;
+  add.querySelector('button').addEventListener('click', () => {
+    const setup = currentSetup();
+    const name = prompt(t('Navn til opsætningen:'), setupName(setup));
+    if (!name || !name.trim()) return;
+    const all = loadJson('presets', []);
+    all.push({ ...setup, name: name.trim().slice(0, 40) });
+    saveJson('presets', all);
+    renderPresets();
+    showToast(t('Gemt. Tryk på "{name}" for at bygge med det.', { name: name.trim() }));
+  });
+  box.appendChild(add);
+}
+
+// ------------------------------------------------------------------ help
+function openHelp() {
+  if (!$('helpDialog').open) $('helpDialog').showModal();
+}
+$('helpBtn').addEventListener('click', openHelp);
+$('helpClose').addEventListener('click', () => $('helpDialog').close());
+
+// ------------------------------------------------------------------ connect automatically
+/** Handy and Intiface reconnect at start when they were connected last time ("Afbryd" stops it). */
+function autoConnect() {
+  if (loadJson('autoHandy', false) && ui.handyAppId.value && ui.handyKey.value && !Handy.connected) toggleHandy();
+  if (loadJson('autoIntiface', false) && !bpClient) toggleDevice();
+}
+
 ui.connectBtn.addEventListener('click', toggleDevice);
 ui.handyConnectBtn.addEventListener('click', toggleHandy);
 // Delay between picture and devices. Mirroring to a TV (Win+K) shows the picture later, so the
@@ -2578,7 +2719,8 @@ ui.offsetSlider.addEventListener('change', () => { saveJson(offsetKey(), Number(
 }));
 
 document.addEventListener('keydown', (e) => {
-  if (meta.dialog.open) return; // the dialog handles its own keys (Esc closes it)
+  if (meta.dialog.open || $('helpDialog').open) return; // dialogs handle their own keys (Esc closes them)
+  if (e.key === '?' && !e.target.matches('input, textarea')) { e.preventDefault(); openHelp(); return; }
   if (calib) {
     if (e.code === 'Escape') closeCalib(false);
     if (e.code === 'ArrowLeft') nudgeCalib(-20);
@@ -2621,6 +2763,8 @@ window.addEventListener('resize', () => { envelope = null; });
     await loadSettings();
     await Promise.all([loadLibrary(), loadSessions()]);
     offerResume();
+    renderPresets();
+    autoConnect();
     api('/api/generate/status').then((s) => { if (s.running && s.all) pollGenAll(); }).catch(() => {});
     watchAudioMeasuring();
     applyVolume();

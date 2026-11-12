@@ -154,6 +154,17 @@ ekstrem hastighed eller meget stilstand.
 **Forhåndsvisning:** Hold musen over et kort i gitteret – videoen spiller lydløst og springer
 gennem fire steder; en hvid markør på hastighedskurven viser hvor.
 
+**Gemte opsætninger:** "＋ Gem opsætning" over "Byg session" gemmer dine valg (længde, forløb,
+hastighed, kategorier, opvarmning, overraskelser osv.) som en knap; ét tryk sætter dem og bygger.
+
+**Fortryd:** 👎, sletning af en session og "Glem det lærte" viser en besked i bunden med "Fortryd" i 6
+sekunder i stedet for en popup. Sletninger sker først, når beskeden forsvinder.
+
+**Forbind automatisk:** Handy og Intiface forbinder selv, når appen åbner, hvis de var forbundet sidst.
+"Afbryd" slår det fra igen.
+
+**Hjælp:** ? øverst (eller tasten ?) viser alle tastaturgenveje og hvad knapperne gør.
+
 **Afspil på tv (Samsung m.fl.):** Tryk Win+K på PC'en og vælg tv'et (Skærmspejling), og brug ⛶
 fuldskærm. Slå "📺 Spejler til tv" til under Justering: billedet kommer lidt senere frem på tv'et, så
 Handy og vibratorer venter tilsvarende (start −250 ms, kan stilles fra −1500 til +500 ms). Tv og PC

@@ -194,6 +194,29 @@ details.more .toggle { margin: 4px 0 10px; }
 .calib-panel .spacer { flex: 1; }
 #holdBtn.on { color: #ffd166; border-color: #ffd166; }
 #remoteUrl { width: 100%; margin: 6px 0; font-size: 12px; }
+.brand-tools { display: flex; gap: 8px; align-items: center; }
+.help-btn { width: 26px; height: 26px; padding: 0; border-radius: 50%; font-weight: 700; font-size: 13px; }
+.help-dialog { width: min(820px, calc(100vw - 32px)); }
+.help-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+.help-dialog h4 { margin: 12px 0 6px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.keys { border-collapse: collapse; width: 100%; font-size: 13px; }
+.keys td { padding: 4px 6px; vertical-align: top; border-bottom: 1px solid var(--line); }
+.keys td:first-child { white-space: nowrap; width: 1%; }
+kbd { display: inline-block; min-width: 18px; padding: 1px 6px; border: 1px solid var(--line); border-bottom-width: 2px;
+  border-radius: 5px; background: var(--panel-2); font: 12px/1.4 inherit; text-align: center; }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 2px; }
+.presets:empty { display: none; }
+.preset { display: inline-flex; align-items: center; gap: 2px; padding: 0; border-radius: 999px; overflow: hidden;
+  border: 1px solid var(--line); background: var(--panel-2); }
+.preset button { border: 0; background: none; border-radius: 0; padding: 4px 10px; font-size: 12px; }
+.preset button.x { padding: 4px 8px 4px 2px; color: var(--muted); opacity: .6; }
+.preset button.x:hover { opacity: 1; color: #ff8a8a; }
+.preset.add button { color: var(--muted); }
+.toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 90; display: flex; gap: 14px;
+  align-items: center; max-width: calc(100vw - 32px); padding: 10px 12px 10px 16px; border-radius: 12px;
+  background: #23262f; border: 1px solid var(--line); box-shadow: 0 8px 30px rgba(0,0,0,.5); font-size: 13px; }
+.toast.hidden { display: none; }
+.toast button { padding: 4px 12px; border-color: var(--accent); color: var(--accent-2); }
 .meta-dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 14px;
   padding: 20px; width: min(520px, calc(100vw - 32px)); }
 .meta-dialog::backdrop { background: rgba(0, 0, 0, 0.6); }

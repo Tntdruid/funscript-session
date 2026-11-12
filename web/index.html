@@ -11,8 +11,11 @@
       <aside class="sidebar">
         <div class="brand-row">
           <div class="brand">Funscript <span>Session</span></div>
-          <div class="lang-switch" title="Sprog / Language">
-            <button data-lang="da">DA</button><button data-lang="en">EN</button>
+          <div class="brand-tools">
+            <button id="helpBtn" class="help-btn" title="Hjælp og tastaturgenveje (?)">?</button>
+            <div class="lang-switch" title="Sprog / Language">
+              <button data-lang="da">DA</button><button data-lang="en">EN</button>
+            </div>
           </div>
         </div>
 
@@ -172,6 +175,7 @@
                 <input type="checkbox" id="smooth" checked /> Glidende overgange mellem klip</label>
             </details>
 
+            <div class="presets" id="presets"></div>
             <div class="build-row">
               <button id="buildBtn" class="primary wide build-btn">Byg session</button>
               <button id="surpriseBtn" class="build-btn dice" title="Overrask mig: tilfældigt forløb, hastighed og kategori">🎲</button>
@@ -331,6 +335,45 @@
         <div class="hint" id="calibStatus"></div>
       </div>
     </div>
+    <div class="toast hidden" id="toast" role="status">
+      <span id="toastText"></span>
+      <button id="toastUndo">Fortryd</button>
+    </div>
+    <dialog class="meta-dialog help-dialog" id="helpDialog">
+      <h3>Hjælp og genveje</h3>
+      <div class="help-cols">
+        <div>
+          <h4>Tastatur</h4>
+          <table class="keys">
+            <tr><td><kbd>Mellemrum</kbd></td><td>Afspil / pause</td></tr>
+            <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>10 sek tilbage / frem</td></tr>
+            <tr><td><kbd>N</kbd></td><td>Næste klip</td></tr>
+            <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Hårdere / roligere resten af sessionen</td></tr>
+            <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>Tempo ned / op</td></tr>
+            <tr><td><kbd>H</kbd></td><td>Hold stille (enhederne står stille, videoen kører)</td></tr>
+            <tr><td><kbd>F</kbd></td><td>Fuldskærm (eller dobbeltklik på videoen)</td></tr>
+            <tr><td><kbd>Esc</kbd></td><td>Luk billeder, kalibrering og vinduer</td></tr>
+            <tr><td><kbd>?</kbd></td><td>Denne hjælp</td></tr>
+          </table>
+        </div>
+        <div>
+          <h4>Knapper</h4>
+          <table class="keys">
+            <tr><td>▼ ▲ ⏹</td><td>Roligere, hårdere eller finale nu: vælger nye klip efter det, der spiller</td></tr>
+            <tr><td>✋</td><td>Hold stille</td></tr>
+            <tr><td>≋</td><td>Udjævn lydstyrken mellem videoer</td></tr>
+            <tr><td>🔔</td><td>Lyd-signaler eller stemme ved temposkift og finale</td></tr>
+            <tr><td>🎲</td><td>Overrask mig: tilfældig session</td></tr>
+            <tr><td>🔁</td><td>Byg en lignende session med andre klip</td></tr>
+            <tr><td>★ 👎</td><td>Favorit / brug aldrig</td></tr>
+            <tr><td>✎</td><td>Omdøb session eller ret metadata</td></tr>
+            <tr><td>＋ Gem</td><td>Gem dine valg som en knap, der bygger med ét tryk</td></tr>
+          </table>
+        </div>
+      </div>
+      <p class="hint">Handy og Intiface forbinder selv ved start, hvis de var forbundet sidst. Tryk "Afbryd" for at slå det fra.</p>
+      <div class="meta-buttons"><span class="spacer"></span><button class="primary" id="helpClose">Luk</button></div>
+    </dialog>
     <dialog class="meta-dialog" id="metaDialog">
       <form method="dialog" id="metaForm">
         <h3>Rediger metadata</h3>
