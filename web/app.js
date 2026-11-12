@@ -155,8 +155,13 @@ async function loadLibrary(remuxStatus = null) {
   updateSpeedLabel();
 }
 
+/** A video's categories: its top folder, plus "PMV" for PMV / Cock Hero / beat videos wherever they lie. */
+function videoCats(v) {
+  return v.beat && v.category !== 'PMV' ? [v.category, 'PMV'] : [v.category];
+}
+
 function inCategory(v) {
-  return !state.categories.size || state.categories.has(v.category);
+  return !state.categories.size || videoCats(v).some((c) => state.categories.has(c));
 }
 
 /** Usable videos in the chosen categories (never ones rated 👎). */
@@ -168,7 +173,7 @@ function usableVideos() {
 function renderCategories() {
   const counts = new Map();
   state.library.filter((v) => v.hasScript && v.playable)
-    .forEach((v) => counts.set(v.category, (counts.get(v.category) || 0) + 1));
+    .forEach((v) => videoCats(v).forEach((c) => counts.set(c, (counts.get(c) || 0) + 1)));
   // forget categories that no longer exist
   [...state.categories].forEach((c) => { if (!counts.has(c)) state.categories.delete(c); });
   const names = [...counts.keys()].sort((a, b) => counts.get(b) - counts.get(a) || a.localeCompare(b, 'da'));
@@ -1305,7 +1310,7 @@ function surpriseMe() {
   updateSpeedLabel();
   const counts = new Map();
   state.library.filter((v) => v.hasScript && v.playable && v.rating >= 0)
-    .forEach((v) => counts.set(v.category, (counts.get(v.category) || 0) + 1));
+    .forEach((v) => videoCats(v).forEach((c) => counts.set(c, (counts.get(c) || 0) + 1)));
   const big = [...counts].filter(([, n]) => n >= 8).map(([name]) => name);
   setCategories(Math.random() < 0.5 || !big.length ? [] : [pick(big)]);
   ui.surprises.checked = true;

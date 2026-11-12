@@ -58,7 +58,8 @@ afspiller det selv i sync med videoen (HSSP). Ved spoling, klipskift eller buffe
 automatisk. Koden gemmes kun i din browser. Intiface kan stadig vælges til andre enheder.
 
 **Kategorier:** Mapperne i biblioteket (fx `X:\Handy\PoV`) bliver kategorier, som kan vælges
-under "Ny session". Mapper med kun én video havner under "Løse filer".
+under "Ny session". Mapper med kun én video havner under "Løse filer". Derudover samler "PMV"
+alle PMV/Cock Hero/beat-videoer, uanset hvilken mappe de ligger i.
 
 **Overgange:** Mellem klip glider scriptet over 600 ms i stedet for at hoppe, og billedet tones over.
 Slås "Glidende overgange mellem klip" fra, er hvert punkt i sessionens script 100% fra dine
