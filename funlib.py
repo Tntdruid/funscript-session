@@ -634,7 +634,7 @@ def parse_nfo(path):
 def vib_from_strokes(actions, full_speed=350.0):
     """Two vibration tracks (0..100) from a stroke script, like hand-made .vib/.vib2 scripts:
     vib throbs once per stroke and is stronger the faster the stroke; vib2 (second motor)
-    follows the overall pace slowly. Pauses in the script are off."""
+    throbs half way between them (the motors take turns) with the overall pace. Pauses are off."""
     if len(actions) < 2:
         return [], []
 
@@ -655,7 +655,16 @@ def vib_from_strokes(actions, full_speed=350.0):
     turns.append(extreme)
     if turns[-1] != actions[-1]:
         turns.append(actions[-1])
-    vib = [(0, 0)]
+    pace = derive_vib(actions, window_ms=500, full_speed=full_speed)
+
+    def pace_at(ms):  # overall pace (0..1) over ~2.5 s, for the second motor
+        if not pace:
+            return 0.0
+        k = min(len(pace) - 1, max(0, int((ms - pace[0][0]) // 500)))
+        near = [p for _, p in pace[max(0, k - 2):k + 3]]
+        return sum(near) / len(near) / 100
+
+    vib, vib2 = [(0, 0)], [(0, 0)]
     i = 0
     while i < len(turns) - 1:
         # very quick strokes are pooled into one throb of at least 250 ms
@@ -669,23 +678,22 @@ def vib_from_strokes(actions, full_speed=350.0):
         if dt <= 0:
             continue
         if moved == 0 or dt > 2500:  # standing still: off
-            if vib[-1][1] != 0:
-                vib.append((t0, 0))
+            for track in (vib, vib2):
+                if track[-1][1] != 0:
+                    track.append((t0, 0))
             continue
         speed = min(1.0, moved / (dt / 1000.0) / full_speed)
+        throb = int(min(200, dt * 0.45))
         vib.append((t0, level(0.25 + 0.75 * speed)))                       # throb at the start
-        vib.append((t0 + int(min(200, dt * 0.45)), level((0.25 + 0.75 * speed) * 0.55)))
+        vib.append((t0 + throb, level((0.25 + 0.75 * speed) * 0.55)))
+        # second motor throbs half way, between the first motor's throbs (they take turns),
+        # with the strength of the overall pace
+        mid = t0 + dt // 2
+        strength = 0.25 + 0.75 * pace_at(mid)
+        vib2.append((mid, level(strength)))
+        vib2.append((mid + int(min(200, dt * 0.4)), level(strength * 0.5)))
     end = actions[-1][0]
     vib.append((end, 0))
-
-    pace = derive_vib(actions, window_ms=500, full_speed=full_speed)
-    vib2, last = [(0, 0)], 0
-    for i in range(len(pace)):
-        near = [p for _, p in pace[max(0, i - 2):i + 3]]  # ~2.5 s average
-        pos = level(sum(near) / len(near) / 100) if near else 0
-        if pos != last:
-            vib2.append((pace[i][0], pos))
-            last = pos
     vib2.append((end, 0))
 
     def clean(track):
@@ -1441,7 +1449,8 @@ BEAT_WORDS = ("pmv", "cock hero", "cockhero", "beat", "hero")
 
 def is_beat_video(v):
     """PMV / Cock Hero / beat videos: their scripts follow the music's beat."""
-    names = [v.get("category", ""), v.get("name", ""), v.get("title", "")] + list(v.get("genres", []))
+    folders = list(Path(v["path"]).parent.parts[1:]) if v.get("path") else []  # eg. X:\Handy\My Stuff\PMV
+    names = [v.get("category", ""), v.get("name", ""), v.get("title", "")] + list(v.get("genres", [])) + folders
     text = " ".join(names).lower()
     return any(word in text for word in BEAT_WORDS) or text.startswith("ch ") or " ch - " in f" {text}"
 

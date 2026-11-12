@@ -28,7 +28,7 @@ ellers bruges længden af scriptet.
    (højst ±2,5 sek flyttet), næste klip starter helst i samme position som det forrige sluttede,
    slaglængden ligner det forrige klip, en video i samme kategori eller med fælles genre/skuespiller
    foretrækkes som opfølger, og intro/rulletekster (første og sidste 4%) undgås.
-   **Takt-sync:** PMV/Cock Hero-videoer (kendt på kategori, genre eller navn) klippes kun på
+   **Takt-sync:** PMV/Cock Hero-videoer (kendt på mappe, genre eller navn) klippes kun på
    bundslaget – i beat-synkrone scripts er det musikkens beat – og efter et PMV-klip foretrækkes et
    klip med samme tempo (slag/min, eller halv/dobbelt takt). Tempoet vises i klip-info.
 
@@ -47,12 +47,12 @@ af (originalen bliver aldrig rørt) og bruger det. Knappen "auto ⇄ / original 
 Manglende beats midt i musikken bliver fyldt ud, så der ikke kommer huller i scriptet.
 
 **Auto vib-scripts:** Samtidig laves `.vib` og `.vib2` til vibratorer (fx Lovense Gush 2 og Edge):
-`.vib` pulserer på beatet og bliver stærkere når musikken er høj, `.vib2` (motor 2) følger bassen
-roligt. De bruges kun når videoen ikke har sine egne vib-scripts. PMV'er der har et script men ingen
+`.vib` pulserer på beatet og bliver stærkere når musikken er høj, `.vib2` (motor 2) pulserer på
+mellemslaget med bassens styrke, så de to motorer skiftes. De bruges kun når videoen ikke har sine egne vib-scripts. PMV'er der har et script men ingen
 vib, får knappen "📳 Lav vib", og "Lav scripts til alle PMV'er" laver dem også.
 Andre videoer (ikke PMV) kan få vib-scripts ud fra deres stroke-script: én puls per slag, stærkere
-jo hurtigere slaget er, og hurtige slag samles til pulser på mindst 250 ms. `.vib2` følger tempoet
-roligt. Brug "📳 Lav vib" på en video eller "📳 Lav vib-scripts til alle andre videoer" (tager et par
+jo hurtigere slaget er, og hurtige slag samles til pulser på mindst 250 ms. `.vib2` pulserer midt i
+hvert slag med det samlede tempos styrke. Brug "📳 Lav vib" på en video eller "📳 Lav vib-scripts til alle andre videoer" (tager et par
 minutter for flere hundrede videoer, kræver ikke librosa).
 3. Klippene lægges efter hinanden og der samles ét funscript for hele sessionen, som gemmes
    i databasen og kan downloades som `.funscript`.

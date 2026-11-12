@@ -86,7 +86,7 @@ def _smooth(values, frames):
 
 def vib_from_music(y, times):
     """Two vibration tracks (0..100) from the music, like hand-made .vib/.vib2 scripts:
-    vib pulses on the beat with the loudness, vib2 (second motor) follows the bass slowly."""
+    vib pulses on the beat with the loudness, vib2 (second motor) pulses on the off-beat with the bass."""
     import numpy as np
     import librosa
     fps = SR / HOP
@@ -117,12 +117,18 @@ def vib_from_music(y, times):
     end = int(len(y) / SR * 1000)
     vib.append({"at": end, "pos": 0})
 
-    vib2, last = [{"at": 0, "pos": 0}], 0
-    for ms in range(0, end, 500):
-        pos = level(min(1.0, at(bass, ms))) if at(energy, ms) >= QUIET_LEVEL else 0
-        if pos != last:  # hold a level until it changes (like hand-made scripts)
-            vib2.append({"at": ms, "pos": pos})
-            last = pos
+    # second motor: a throb on the off-beat (half way between beats, so the two motors take
+    # turns), as strong as the bass
+    vib2 = [{"at": 0, "pos": 0}]
+    for t0, t1 in zip(times, times[1:]):
+        mid = (t0 + t1) / 2
+        if at(energy, mid) < QUIET_LEVEL:
+            if vib2[-1]["pos"] != 0:
+                vib2.append({"at": int(mid), "pos": 0})
+            continue
+        strength = 0.25 + 0.75 * min(1.0, at(bass, mid))
+        vib2.append({"at": int(mid), "pos": level(strength)})
+        vib2.append({"at": int(mid + min(180, (t1 - t0) * 0.4)), "pos": level(strength * 0.5)})
     vib2.append({"at": end, "pos": 0})
     return _clean(vib), _clean(vib2)
 
@@ -207,7 +213,7 @@ def generate_all(path):
     vib, vib2 = vib_from_music(y, times)
     return {"stroke": _funscript(actions, "Auto beat script", notes),
             "vib": _funscript(vib, "Auto vib script", notes + ", vibration paa beatet"),
-            "vib2": _funscript(vib2, "Auto vib2 script", notes + ", vibration efter bassen")}
+            "vib2": _funscript(vib2, "Auto vib2 script", notes + ", vibration paa mellemslaget efter bassen")}
 
 
 def generate(path):
