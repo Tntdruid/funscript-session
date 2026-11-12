@@ -26,7 +26,7 @@ CHUNK = 1024 * 1024
 # Messages with details keep them: only the Danish prefix is translated.
 MESSAGES_EN = {
     "Mappen findes ikke: ": "Folder not found: ",
-    "Angiv en fuld sti, fx D:\Sessioner": "Enter a full path, eg. D:\Sessions",
+    "Angiv en fuld sti, fx D:\\Sessioner": "Enter a full path, eg. D:\\Sessions",
     "Gem ikke sessioner inde i videobiblioteket": "Don't save sessions inside the video library",
     "Kan ikke bruge mappen: ": "Can't use the folder: ",
     "Ugyldigt klip": "Invalid clip",

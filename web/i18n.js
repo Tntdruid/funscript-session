@@ -190,6 +190,7 @@ const EN = {
   '{n} fejlede': '{n} failed',
   'Gemmes i mappen "Genererede scripts" i app-mappen, ikke ved videoerne. Tager ca. 1 sek per minut video.':
     'Saved in the "Genererede scripts" folder in the app folder, not next to the videos. Takes about 1 s per minute of video.',
+  "Alle PMV'er har et script ({n} lavet automatisk)": 'All PMVs have a script ({n} made automatically)',
   'Åbn mappen med de lavede scripts': 'Open the folder with the made scripts',
   'Lav script': 'Make script',
   'Laver script…': 'Making script…',

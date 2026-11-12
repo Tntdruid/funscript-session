@@ -320,7 +320,8 @@ let genAllPolling = false;
 function renderGenAll(status = null) {
   const waiting = state.library.filter((v) => v.canGenerate).length;
   const running = status?.running && status?.all;
-  $('genAllBox').classList.toggle('hidden', !waiting && !running && !status?.all);
+  const made = state.library.filter((v) => v.autoScript).length;
+  $('genAllBox').classList.toggle('hidden', !waiting && !running && !status?.all && !made);
   const button = $('genAllBtn');
   button.textContent = running ? `⏹ ${t('Stop')}` : `🎵 ${t("Lav scripts til alle PMV'er ({n})", { n: waiting })}`;
   button.disabled = !running && !waiting;
@@ -333,6 +334,8 @@ function renderGenAll(status = null) {
     $('genAllStatus').textContent = t('{n} scripts lavet', { n: done - failed.length })
       + (failed.length ? ` · ${t('{n} fejlede', { n: failed.length })}` : '');
     $('genAllStatus').title = failed.map((f) => `${f.name}: ${f.error}`).join('\n');
+  } else if (!waiting) {
+    $('genAllStatus').textContent = t("Alle PMV'er har et script ({n} lavet automatisk)", { n: made });
   } else {
     $('genAllStatus').textContent = t('Gemmes i mappen "Genererede scripts" i app-mappen, ikke ved videoerne. Tager ca. 1 sek per minut video.');
   }
