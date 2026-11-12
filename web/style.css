@@ -184,6 +184,16 @@ details.more .toggle { margin: 4px 0 10px; }
 .grid-head input[type="search"] { width: 260px; }
 .grid-head select { width: auto; max-width: 220px; }
 .vcard .rate button.edit { font-size: 13px; }
+.calib { position: fixed; inset: 0; z-index: 80; background: #000; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 28px; padding: 16px; }
+.calib.hidden { display: none; }
+.calib-dot { width: min(38vh, 60vw); aspect-ratio: 1; border-radius: 50%; background: #1b1d24; border: 3px solid #333; }
+.calib-dot.flash { background: #fff; border-color: #fff; box-shadow: 0 0 80px #fff; }
+.calib-panel { width: min(520px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+.calib-panel h3 { margin: 0 0 6px; }
+.calib-panel .spacer { flex: 1; }
+#holdBtn.on { color: #ffd166; border-color: #ffd166; }
+#remoteUrl { width: 100%; margin: 6px 0; font-size: 12px; }
 .meta-dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 14px;
   padding: 20px; width: min(520px, calc(100vw - 32px)); }
 .meta-dialog::backdrop { background: rgba(0, 0, 0, 0.6); }

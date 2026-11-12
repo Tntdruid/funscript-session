@@ -9,12 +9,15 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlparse
 
+from remote import Remote
 from funlib import (Library, remux_dir, generated_dir, build_session, session_funscript, rebuild_session,
                     find_replacement, steer_session, scan_voice_folder, voice_dir)
 
 ROOT = Path(__file__).resolve().parent
 WEB = ROOT / "web"
 LIBRARY = Library(os.environ.get("FUNSCRIPT_DB", ROOT / "funscript.db"), ROOT / "videos")
+REMOTE = Remote(LIBRARY, WEB, int(os.environ.get("FUNSCRIPT_REMOTE_PORT")
+                                  or int(os.environ.get("FUNSCRIPT_PORT", 8000)) + 1))
 
 VIDEO_TYPES = {
     ".mp4": "video/mp4", ".m4v": "video/mp4", ".mov": "video/mp4",
@@ -113,6 +116,10 @@ class Handler(SimpleHTTPRequestHandler):
 
         if path == "/api/health":
             return self.send_json({"status": "ok", "root": str(ROOT)})
+        if path == "/api/remote":
+            return self.send_json(REMOTE.info())
+        if path == "/api/remote/wait":  # long-poll: commands from the phone for this page
+            return self.send_json({"commands": REMOTE.wait(20)})
         if path == "/api/settings":
             return self.send_json({"libraryPath": LIBRARY.library_folder(),
                                    "exportPath": str(LIBRARY.export_folder())})
@@ -219,6 +226,16 @@ class Handler(SimpleHTTPRequestHandler):
         if data is None:
             return self.send_error(400, "Invalid JSON payload")
 
+        if path == "/api/remote":  # phone remote on/off (listens on the home network)
+            if data.get("newKey"):
+                REMOTE.new_key()
+            if "enabled" in data:
+                LIBRARY.set_setting("remote_enabled", "1" if data.get("enabled") else "0")
+                REMOTE.start() if data.get("enabled") else REMOTE.stop()
+            return self.send_json(REMOTE.info())
+        if path == "/api/remote/status":  # state of this page, shown on the phone
+            REMOTE.set_status(data)
+            return self.send_json({"ok": True})
         if path == "/api/settings":
             if "libraryPath" in data:
                 folder = str(data.get("libraryPath", "")).strip()
@@ -561,6 +578,9 @@ if __name__ == "__main__":
     except OSError as exc:
         print(f"Kunne ikke gemme sessioner som filer: {exc}")
     start_audio_measuring()
+    if LIBRARY.get_setting("remote_enabled") == "1":
+        REMOTE.start()
+        print(REMOTE.error or f"Fjernbetjening: {REMOTE.info()['url']}")
     httpd = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"Funscript Session Player kører på http://{HOST}:{PORT}")
     httpd.serve_forever()

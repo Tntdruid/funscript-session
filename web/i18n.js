@@ -197,6 +197,30 @@ const EN = {
   'Lav alle auto-scripts igen med den nyeste version? Det tager lidt tid. Originaler bliver ikke rørt.':
     'Make all auto scripts again with the newest version? It takes a while. Originals are not touched.',
   'Lav vib': 'Make vib',
+  '📱 Fjernbetjening': '📱 Remote control',
+  'Styr afspilningen fra mobilen, fx når du ser på tv. Mobilen skal være på samme wifi. Kun fjernbetjeningen kan nås fra netværket, og kun med nøglen i linket.':
+    'Control playback from your phone, eg. while watching on TV. The phone must be on the same wifi. Only the remote can be reached from the network, and only with the key in the link.',
+  'Slået fra': 'Off',
+  'Fejl': 'Error',
+  'Mobil forbundet': 'Phone connected',
+  'Venter på mobil': 'Waiting for phone',
+  'Styr fra mobilen': 'Control from phone',
+  'Åbn linket på mobilen, og gem det som bogmærke:': 'Open the link on your phone and bookmark it:',
+  'Kopiér link': 'Copy link',
+  'Kopieret': 'Copied',
+  'Nyt link': 'New link',
+  'Lav et nyt link. Det gamle holder op med at virke': 'Make a new link. The old one stops working',
+  'Lav et nyt link? Det gamle link på mobilen holder op med at virke.': 'Make a new link? The old link on the phone stops working.',
+  'Første gang spørger Windows Firewall om Python må bruge netværket: tillad på private netværk.':
+    'The first time, Windows Firewall asks whether Python may use the network: allow it on private networks.',
+  'Hold stille: Handy og vibratorer står stille, videoen kører videre (H)': 'Hold still: Handy and vibrators stop, the video plays on (H)',
+  '🎯 Kalibrér forsinkelse': '🎯 Calibrate delay',
+  'Find den rigtige forsinkelse med et blink og et klik hvert sekund': 'Find the right delay with a flash and a click every second',
+  'Kalibrér forsinkelse': 'Calibrate delay',
+  'Cirklen blinker og klikker hvert sekund, og Handy rammer bunden på blinket (vibratorer giver et puls). Rammer Handy før blinket, så træk mod minus. Rammer den efter, så træk mod plus.':
+    'The circle flashes and clicks every second, and the Handy hits the bottom on the flash (vibrators give a pulse). If the Handy is early, drag towards minus. If it is late, drag towards plus.',
+  'Forbind Handy eller en vibrator først': 'Connect the Handy or a vibrator first',
+  'Sender test-script til Handy…': 'Sending test script to the Handy…',
   '📺 Spejler til tv': '📺 Mirroring to TV',
   "Tryk Win+K på PC'en og vælg dit Samsung TV. Billedet kommer lidt senere frem på tv'et, så Handy venter tilsvarende. Er Handy foran billedet, så træk mod minus.":
     'Press Win+K on the PC and pick your Samsung TV. The picture shows up a little later on the TV, so the Handy waits as much. If the Handy is ahead of the picture, drag towards minus.',

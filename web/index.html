@@ -93,6 +93,7 @@
             </label>
             <input id="volume" type="range" min="0" max="1" step="0.05" value="0.6" title="Lydstyrke" />
             <button id="levelBtn" class="level-btn on" title="Udjævn lydstyrke mellem videoer">≋</button>
+            <button id="holdBtn" class="level-btn" title="Hold stille: Handy og vibratorer står stille, videoen kører videre (H)">✋</button>
             <button id="cueBtn" class="level-btn" title="Lyd-signaler ved temposkift, pauser og finale">🔔</button>
             <button id="fullscreenBtn" title="Fuldskærm (F eller dobbeltklik på videoen)">⛶</button>
           </div>
@@ -229,6 +230,23 @@
               </label>
             </div>
 
+            <div class="row-between device-head">
+              <h3>📱 Fjernbetjening <span class="info" title="Styr afspilningen fra mobilen, fx når du ser på tv. Mobilen skal være på samme wifi. Kun fjernbetjeningen kan nås fra netværket, og kun med nøglen i linket.">ⓘ</span></h3>
+              <span class="pill" id="remoteState">Slået fra</span>
+            </div>
+            <div class="device-box">
+              <label class="toggle"><input type="checkbox" id="remoteOn" /> Styr fra mobilen</label>
+              <div id="remoteInfo" hidden>
+                <div class="hint">Åbn linket på mobilen, og gem det som bogmærke:</div>
+                <input id="remoteUrl" type="text" readonly spellcheck="false" />
+                <div class="inline">
+                  <button id="remoteCopy">Kopiér link</button>
+                  <button id="remoteNewKey" title="Lav et nyt link. Det gamle holder op med at virke">Nyt link</button>
+                </div>
+                <div class="hint">Første gang spørger Windows Firewall om Python må bruge netværket: tillad på private netværk.</div>
+              </div>
+            </div>
+
             <details class="more" data-key="adjustOpen">
               <summary>Justering <span class="summary-value">forsinkelse, slag-område</span></summary>
               <label class="toggle"><input type="checkbox" id="tvMode" /> 📺 Spejler til tv</label>
@@ -237,6 +255,7 @@
               <label class="field">Forsinkelse <span id="offsetLabel">0 ms</span>
                 <input id="offsetSlider" type="range" min="-1500" max="500" step="10" value="0" />
               </label>
+              <button id="calibBtn" class="wide" title="Find den rigtige forsinkelse med et blink og et klik hvert sekund">🎯 Kalibrér forsinkelse</button>
               <label class="field">Signaler
                 <select id="cueMode">
                   <option value="sounds">Lyde</option>
@@ -292,6 +311,25 @@
       <div class="chips small grid-cats" id="gridCategories"></div>
       <div class="grid" id="gridList"></div>
       <div class="grid-hint">Klik på et billede for at vælge/fravælge det til sessioner · ★ = favorit · 👎 = brug aldrig · Esc lukker</div>
+    </div>
+    <div class="calib hidden" id="calib">
+      <div class="calib-dot" id="calibDot"></div>
+      <div class="calib-panel">
+        <h3>Kalibrér forsinkelse</h3>
+        <p class="hint">Cirklen blinker og klikker hvert sekund, og Handy rammer bunden på blinket (vibratorer
+          giver et puls). Rammer Handy før blinket, så træk mod minus. Rammer den efter, så træk mod plus.</p>
+        <label class="field">Forsinkelse <span id="calibLabel">0 ms</span>
+          <input id="calibSlider" type="range" min="-1500" max="500" step="10" value="0" />
+        </label>
+        <div class="inline">
+          <button id="calibMinus">−20 ms</button>
+          <button id="calibPlus">+20 ms</button>
+          <span class="spacer"></span>
+          <button id="calibCancel">Annullér</button>
+          <button id="calibDone" class="primary">Gem</button>
+        </div>
+        <div class="hint" id="calibStatus"></div>
+      </div>
     </div>
     <dialog class="meta-dialog" id="metaDialog">
       <form method="dialog" id="metaForm">

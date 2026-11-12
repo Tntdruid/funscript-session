@@ -2024,7 +2024,7 @@ function send(promise) {
 
 /** Drive every Intiface device: strokers follow the stroke track, vibrators the vib track(s). */
 function driveDevice(t) {
-  if (!bpDevices.length || !state.playing || switching || !state.session) return;
+  if (!bpDevices.length || !state.playing || switching || !state.session || state.hold) return;
   const tt = t + Number(ui.offsetSlider.value);
   const { actions, vib, vib2 } = state.session;
 
@@ -2106,7 +2106,7 @@ function prepareHandy() {
 
 /** Tell the Handy where we are in the session script (after play, seek, clip change or drift). */
 async function handySync() {
-  if (!Handy.connected || !state.playing || !state.session) return;
+  if (!Handy.connected || !state.playing || !state.session || state.hold || calib) return;
   const token = ++handyToken;
   lastHandySync = performance.now();
   try {
@@ -2164,7 +2164,7 @@ function showTemp(temp) {
 
 /** Resync when the Handy is ahead of or behind the video (seek, buffering, clip change). */
 function checkHandyDrift(threshold = 250, minGap = 2000) {
-  if (!Handy.connected || !state.playing || switching) return;
+  if (!Handy.connected || !state.playing || switching || state.hold) return;
   if (performance.now() - lastHandySync < minGap) return;
   const expected = Handy.expectedTime();
   const actual = state.sessionTime + Number(ui.offsetSlider.value);
@@ -2339,6 +2339,208 @@ ui.timelineCanvas.addEventListener('click', (e) => {
   seekSession(((e.clientX - rect.left) / rect.width) * state.session.totalMs);
 });
 
+// ------------------------------------------------------------------ hold still
+/** ✋: devices stand still while the video plays on (from the PC or the phone). */
+function toggleHold(on = !state.hold) {
+  state.hold = on;
+  $('holdBtn').classList.toggle('on', on);
+  if (on) {
+    stopDevice();
+  } else {
+    deviceCursor = -1;
+    handySync();
+  }
+}
+
+// ------------------------------------------------------------------ phone remote
+let remoteOn = false;
+let remoteLoops = false;
+
+function showRemote(info) {
+  remoteOn = info.enabled;
+  $('remoteOn').checked = info.enabled;
+  $('remoteInfo').hidden = !info.enabled;
+  $('remoteUrl').value = info.url || '';
+  const pill = $('remoteState');
+  pill.textContent = info.error ? t('Fejl') : !info.enabled ? t('Slået fra')
+    : info.phoneSeen ? t('Mobil forbundet') : t('Venter på mobil');
+  pill.title = info.error || '';
+  pill.classList.toggle('on', info.enabled && info.phoneSeen);
+  if (info.enabled) startRemoteLoops();
+}
+
+async function setRemote(body) {
+  try {
+    showRemote(await api('/api/remote', { method: 'POST', body }));
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+function startRemoteLoops() {
+  if (remoteLoops) return;
+  remoteLoops = true;
+  (async () => {  // commands from the phone (long-poll)
+    while (remoteOn) {
+      try {
+        const { commands } = await api('/api/remote/wait');
+        commands.forEach(runRemote);
+      } catch {
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
+    remoteLoops = false;
+  })();
+  (async () => {  // what the phone shows
+    for (let n = 0; remoteOn; n += 1) {
+      const s = state.session;
+      const clip = s?.clips[state.clipIndex];
+      api('/api/remote/status', { method: 'POST', body: {
+        session: s?.name || '', clip: clip ? `${t('Klip {i}/{n}', { i: state.clipIndex + 1, n: s.clips.length })} · ${clip.name}` : '',
+        time: state.sessionTime || 0, total: s?.totalMs || 0, playing: state.playing, hold: !!state.hold,
+        rate: state.rate, volume: Number(ui.volume.value),
+      } }).catch(() => {});
+      if (n % 10 === 9) api('/api/remote').then(showRemote).catch(() => {});
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  })();
+}
+
+function runRemote(command) {
+  const volume = (step) => {
+    ui.volume.value = clamp(Number(ui.volume.value) + step, 0, 1);
+    ui.volume.dispatchEvent(new Event('input'));
+    ui.volume.dispatchEvent(new Event('change'));
+  };
+  ({
+    toggle: togglePlay,
+    next: nextClip,
+    prev: () => ui.prevBtn.click(),
+    more: () => ui.moreBtn.click(),
+    less: () => ui.lessBtn.click(),
+    finish: () => ui.finishBtn.click(),
+    faster: () => setRate(state.rate + 0.05, true),
+    slower: () => setRate(state.rate - 0.05, true),
+    louder: () => volume(0.1),
+    quieter: () => volume(-0.1),
+    hold: () => toggleHold(),
+  }[command] || (() => {}))();
+}
+
+$('remoteOn').addEventListener('change', () => setRemote({ enabled: $('remoteOn').checked }));
+$('remoteNewKey').addEventListener('click', () => {
+  if (confirm(t('Lav et nyt link? Det gamle link på mobilen holder op med at virke.'))) setRemote({ newKey: true });
+});
+$('remoteCopy').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText($('remoteUrl').value); } catch { $('remoteUrl').select(); }
+  $('remoteCopy').textContent = t('Kopieret');
+  setTimeout(() => { $('remoteCopy').textContent = t('Kopiér link'); }, 1500);
+});
+api('/api/remote').then(showRemote).catch(() => {});
+
+// ------------------------------------------------------------------ delay calibration
+// A flash + click every second on the screen (or TV), and the Handy hits the bottom on each one;
+// the user drags the delay until they happen together.
+const CALIB_MS = 1000;
+let calib = null;
+
+function calibTime() { return performance.now() - calib.start; }
+function calibOffset() { return Number($('calibSlider').value); }
+
+function showCalibOffset() {
+  const ms = calibOffset();
+  $('calibLabel').textContent = ms < 0 ? t('{n} ms (venter på billedet)', { n: ms })
+    : ms > 0 ? t('{n} ms (før billedet)', { n: `+${ms}` }) : '0 ms';
+}
+
+async function calibSync() {
+  if (calib && Handy.connected) await Handy.play(calibTime() + calibOffset(), 1).catch(() => {});
+}
+
+function calibClick() {
+  try {
+    const ctx = cueContext();
+    tone(ctx, ctx.destination, { f0: 1400, dur: 0.05, peak: 0.4, attack: 0.002 });
+  } catch { /* no sound */ }
+}
+
+function calibFrame() {
+  if (!calib) return;
+  const now = calibTime();
+  const beat = Math.floor(now / CALIB_MS);
+  if (beat !== calib.beat) {  // the picture: flash + click
+    calib.beat = beat;
+    $('calibDot').classList.add('flash');
+    calibClick();
+    setTimeout(() => $('calibDot').classList.remove('flash'), 120);
+  }
+  const deviceBeat = Math.floor((now + calibOffset()) / CALIB_MS);
+  if (deviceBeat !== calib.deviceBeat) {  // vibrators: a short pulse on their own (delayed) beat
+    calib.deviceBeat = deviceBeat;
+    const vibs = bpDevices.filter((d) => !canStroke(d) && motorCount(d));
+    vibs.forEach((d) => send(d.vibrate(0.8)));
+    if (vibs.length) setTimeout(() => vibs.forEach((d) => send(d.stop())), 150);
+  }
+}
+
+async function openCalib() {
+  if (!Handy.connected && !bpDevices.length) {
+    alert(t('Forbind Handy eller en vibrator først'));
+    return;
+  }
+  if (state.playing) setPlaying(false);
+  const totalMs = 15 * 60 * 1000;
+  const actions = [];
+  for (let at = 0; at <= totalMs; at += CALIB_MS) {
+    actions.push({ at, pos: 0 }, { at: at + CALIB_MS / 2, pos: 100 });
+  }
+  calib = { start: performance.now(), beat: -1, deviceBeat: -1, timer: 0 };
+  $('calibSlider').value = ui.offsetSlider.value;
+  showCalibOffset();
+  $('calib').classList.remove('hidden');
+  $('calib').requestFullscreen?.().catch(() => {});
+  calib.timer = setInterval(calibFrame, 10); // a timer, not rAF: keeps going in a background tab
+  if (Handy.connected) {
+    $('calibStatus').textContent = t('Sender test-script til Handy…');
+    try {
+      await Handy.prepare({ id: 'calib', actions, totalMs });
+      await calibSync();
+      $('calibStatus').textContent = '';
+    } catch (err) {
+      $('calibStatus').textContent = err.message;
+    }
+  }
+}
+
+function closeCalib(save) {
+  if (!calib) return;
+  clearInterval(calib.timer);
+  calib = null;
+  $('calib').classList.add('hidden');
+  if (document.fullscreenElement === $('calib')) document.exitFullscreen().catch(() => {});
+  stopDevice();
+  if (save) {
+    ui.offsetSlider.value = $('calibSlider').value;
+    ui.offsetSlider.dispatchEvent(new Event('input'));
+    ui.offsetSlider.dispatchEvent(new Event('change'));
+  }
+}
+
+function nudgeCalib(step) {
+  $('calibSlider').value = Number($('calibSlider').value) + step;
+  showCalibOffset();
+  calibSync();
+}
+
+$('calibBtn').addEventListener('click', openCalib);
+$('calibSlider').addEventListener('input', showCalibOffset);
+$('calibSlider').addEventListener('change', calibSync);
+$('calibMinus').addEventListener('click', () => nudgeCalib(-20));
+$('calibPlus').addEventListener('click', () => nudgeCalib(20));
+$('calibDone').addEventListener('click', () => closeCalib(true));
+$('calibCancel').addEventListener('click', () => closeCalib(false));
+$('holdBtn').addEventListener('click', () => toggleHold());
+
 ui.connectBtn.addEventListener('click', toggleDevice);
 ui.handyConnectBtn.addEventListener('click', toggleHandy);
 // Delay between picture and devices. Mirroring to a TV (Win+K) shows the picture later, so the
@@ -2377,6 +2579,12 @@ ui.offsetSlider.addEventListener('change', () => { saveJson(offsetKey(), Number(
 
 document.addEventListener('keydown', (e) => {
   if (meta.dialog.open) return; // the dialog handles its own keys (Esc closes it)
+  if (calib) {
+    if (e.code === 'Escape') closeCalib(false);
+    if (e.code === 'ArrowLeft') nudgeCalib(-20);
+    if (e.code === 'ArrowRight') nudgeCalib(20);
+    return;
+  }
   if (gridOpen()) {
     if (e.code === 'Escape') closeGrid();
     return;
@@ -2389,6 +2597,7 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'ArrowUp') { e.preventDefault(); steer('more'); }
   if (e.code === 'ArrowDown') { e.preventDefault(); steer('less'); }
   if (e.code === 'KeyF') toggleFullscreen();
+  if (e.code === 'KeyH') toggleHold();
   if (e.code === 'BracketLeft') setRate(state.rate - 0.05, true);
   if (e.code === 'BracketRight') setRate(state.rate + 0.05, true);
 });

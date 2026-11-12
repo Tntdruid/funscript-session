@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0e0f13" />
+<title>Fjernbetjening</title>
+<style>
+  :root { --bg: #0e0f13; --panel: #171920; --line: #2a2e3a; --text: #e7e9ee; --muted: #8a90a0; --accent: #ff4f7b; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.4 system-ui, sans-serif;
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); user-select: none; }
+  .now { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 14px; }
+  .title { font-weight: 600; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .bar { height: 5px; background: #2a2f3a; border-radius: 3px; margin-top: 10px; overflow: hidden; }
+  .bar div { height: 100%; width: 0; background: var(--accent); }
+  .offline { color: #ffb86b; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  button { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 14px;
+    font-size: 26px; padding: 18px 0; min-height: 72px; touch-action: manipulation; }
+  button small { display: block; font-size: 11px; color: var(--muted); margin-top: 4px; }
+  button:active { transform: scale(0.96); background: #232630; }
+  button.big { grid-column: span 3; font-size: 34px; background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.on { border-color: #ffd166; color: #ffd166; }
+  h3 { margin: 18px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .msg { color: #ff8a8a; text-align: center; margin-top: 30vh; padding: 0 16px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="now">
+    <div class="title" id="title">Forbinder…</div>
+    <div class="sub" id="sub"></div>
+    <div class="bar"><div id="bar"></div></div>
+  </div>
+  <div class="grid">
+    <button class="big" data-cmd="toggle" id="play">▶</button>
+    <button data-cmd="prev">⏮<small>forrige</small></button>
+    <button data-cmd="hold" id="hold">✋<small>hold stille</small></button>
+    <button data-cmd="next">⏭<small>næste</small></button>
+  </div>
+  <h3>Styr resten af sessionen</h3>
+  <div class="grid">
+    <button data-cmd="less">▼<small>roligere</small></button>
+    <button data-cmd="more">▲<small>hårdere</small></button>
+    <button data-cmd="finish">⏹<small>finale nu</small></button>
+  </div>
+  <h3>Tempo og lyd</h3>
+  <div class="grid">
+    <button data-cmd="slower">−<small>tempo <span id="rate"></span></small></button>
+    <button data-cmd="faster">+<small>tempo</small></button>
+    <span></span>
+    <button data-cmd="quieter">🔉<small>lavere</small></button>
+    <button data-cmd="louder">🔊<small>højere <span id="vol"></span></small></button>
+  </div>
+</div>
+<script>
+  const key = new URLSearchParams(location.search).get('k') || '';
+  const $ = (id) => document.getElementById(id);
+  const fmt = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+  if (!key) document.body.innerHTML = '<p class="msg">Linket mangler nøglen. Brug linket fra appen på PC\'en.</p>';
+
+  async function send(cmd) {
+    if (navigator.vibrate) navigator.vibrate(15);
+    try {
+      await fetch(`/api/cmd?k=${encodeURIComponent(key)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cmd }) });
+      setTimeout(refresh, 250);
+    } catch { /* shown by the next refresh */ }
+  }
+  document.querySelectorAll('[data-cmd]').forEach((b) => b.addEventListener('click', () => send(b.dataset.cmd)));
+
+  async function refresh() {
+    try {
+      const res = await fetch(`/api/status?k=${encodeURIComponent(key)}`, { cache: 'no-store' });
+      if (res.status === 403) { document.body.innerHTML = '<p class="msg">Nøglen passer ikke. Hent et nyt link i appen på PC\'en.</p>'; return false; }
+      const s = await res.json();
+      if (!s.online) {
+        $('title').textContent = 'Appen er ikke åben på PC\'en';
+        $('title').className = 'title offline';
+        $('sub').textContent = 'Åbn Funscript Session i browseren på PC\'en.';
+        return true;
+      }
+      $('title').className = 'title';
+      $('title').textContent = s.session || 'Ingen session valgt';
+      $('sub').textContent = s.session
+        ? [s.clip, `${fmt(s.time)} / ${fmt(s.total)}`, s.hold ? '✋ holder stille' : ''].filter(Boolean).join(' · ')
+        : 'Vælg eller byg en session på PC\'en.';
+      $('bar').style.width = s.total ? `${Math.min(100, (s.time / s.total) * 100)}%` : '0';
+      $('play').textContent = s.playing ? '❚❚' : '▶';
+      $('hold').classList.toggle('on', !!s.hold);
+      $('rate').textContent = s.rate ? `${Math.round(s.rate * 100)}%` : '';
+      $('vol').textContent = s.volume != null ? `${Math.round(s.volume * 100)}%` : '';
+    } catch {
+      $('title').textContent = 'Kan ikke nå PC\'en';
+      $('title').className = 'title offline';
+      $('sub').textContent = 'Er telefonen på samme netværk, og kører serveren?';
+    }
+    return true;
+  }
+  if (key) {
+    refresh();
+    setInterval(refresh, 1000);
+  }
+</script>
+</body>
+</html>

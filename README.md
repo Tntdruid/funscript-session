@@ -158,6 +158,14 @@ gennem fire steder; en hvid markør på hastighedskurven viser hvor.
 fuldskærm. Slå "📺 Spejler til tv" til under Justering: billedet kommer lidt senere frem på tv'et, så
 Handy og vibratorer venter tilsvarende (start −250 ms, kan stilles fra −1500 til +500 ms). Tv og PC
 husker hver sin forsinkelse.
+"🎯 Kalibrér forsinkelse" viser en cirkel, der blinker og klikker hvert sekund, mens Handy rammer bunden
+på blinket (vibratorer giver et puls). Træk i skyderen (eller ← →) til de passer, og tryk Gem.
+
+**Fjernbetjening fra mobilen:** Slå "📱 Styr fra mobilen" til under Enheder, og åbn linket på mobilen
+(samme wifi). Her er afspil/pause, forrige/næste, ✋ hold stille (enhederne står stille, videoen kører
+videre, også H på tastaturet), ▼▲⏹, tempo og lydstyrke. Fjernbetjeningen kører på port 8001 og kan kun
+styre afspilningen, og kun med nøglen i linket; resten af appen kan stadig kun nås fra PC'en selv.
+"Nyt link" laver en ny nøgle. Første gang spørger Windows Firewall: tillad Python på private netværk.
 
 **Rediger metadata:** ✎ på et billede i det store overblik åbner en editor til titel, skuespillere,
 genrer, studie og år. Rettelserne gemmes i appens database og overlever en ny scanning; .nfo-filerne
