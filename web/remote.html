@@ -24,6 +24,8 @@
   button.big { grid-column: span 3; font-size: 34px; background: var(--accent); border-color: var(--accent); color: #fff; }
   button.on { border-color: #ffd166; color: #ffd166; }
   h3 { margin: 18px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .grid.edge { margin-top: 10px; }
+  .grid.edge .big { background: #5a2b44; border-color: #8a3d64; font-size: 26px; }
   .msg { color: #ff8a8a; text-align: center; margin-top: 30vh; padding: 0 16px; }
 </style>
 </head>
@@ -40,6 +42,9 @@
     <button data-cmd="hold" id="hold">✋<small>hold stille</small></button>
     <button data-cmd="next">⏭<small>næste</small></button>
   </div>
+  <div class="grid edge" id="edgeRow" hidden>
+    <button class="big" data-cmd="edge" id="edgeBtn">😮 Tæt på</button>
+  </div>
   <h3>Styr resten af sessionen</h3>
   <div class="grid">
     <button data-cmd="less">▼<small>roligere</small></button>
@@ -53,6 +58,7 @@
     <span></span>
     <button data-cmd="quieter">🔉<small>lavere</small></button>
     <button data-cmd="louder">🔊<small>højere <span id="vol"></span></small></button>
+    <button data-cmd="mark">⭐<small>markér sted</small></button>
   </div>
 </div>
 <script>
@@ -89,6 +95,8 @@
       $('bar').style.width = s.total ? `${Math.min(100, (s.time / s.total) * 100)}%` : '0';
       $('play').textContent = s.playing ? '❚❚' : '▶';
       $('hold').classList.toggle('on', !!s.hold);
+      $('edgeRow').hidden = !s.edge;
+      if (s.edge) $('edgeBtn').textContent = s.edge.resting > 0 ? `Hvil ${s.edge.resting} s · 🎯 ${s.edge.edges}` : `😮 Tæt på · 🎯 ${s.edge.edges}`;
       $('rate').textContent = s.rate ? `${Math.round(s.rate * 100)}%` : '';
       $('vol').textContent = s.volume != null ? `${Math.round(s.volume * 100)}%` : '';
     } catch {

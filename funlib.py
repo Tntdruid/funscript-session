@@ -59,6 +59,22 @@ CREATE TABLE IF NOT EXISTS feedback (
     score REAL NOT NULL,
     at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS marks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    video_id INTEGER NOT NULL,
+    at_ms INTEGER NOT NULL,
+    created_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS play_log (
+    day TEXT PRIMARY KEY,
+    seconds INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS edge_games (
+    at REAL PRIMARY KEY,
+    edges INTEGER NOT NULL,
+    seconds INTEGER NOT NULL,
+    longest INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -884,6 +900,7 @@ class Library:
         root = Path(self.library_folder())
         videos = [self._with_category(self._video_dict(r), root) for r in rows]
         taste = self.taste()
+        marks = self.marks_by_video()
         generate_ok = can_generate()
         for v in videos:
             v["taste"] = round(taste.get(v["id"], {}).get("score", 0.0), 2)
@@ -894,6 +911,7 @@ class Library:
             v["canMakeAuto"] = (v["beat"] and v["hasOriginal"] and not v["hasAuto"]
                                 and v["playable"] and generate_ok)
             # vibration scripts from the music for PMVs that have no .vib
+            v["marks"] = marks.get(v["id"], [])
             v["canMakeVib"] = (not v["hasVib"] and v["playable"]
                                and ((v["beat"] and generate_ok) or v["hasScript"]))
         # A top-level folder holding a single video is that video's own folder, not a category.
@@ -1147,6 +1165,158 @@ class Library:
         finally:
             state["running"] = False
             state["current"] = ""
+
+    # ------------------------------------------------------------ favourite spots
+    def add_mark(self, video_id, at_ms):
+        with self.lock, self.conn:
+            cur = self.conn.execute("INSERT INTO marks(video_id, at_ms, created_at) VALUES(?, ?, ?)",
+                                    (video_id, max(0, int(at_ms)), time.time()))
+        return cur.lastrowid
+
+    def delete_mark(self, mark_id):
+        with self.lock, self.conn:
+            self.conn.execute("DELETE FROM marks WHERE id=?", (mark_id,))
+
+    def marks_by_video(self):
+        with self.lock:
+            rows = self.conn.execute("SELECT video_id, at_ms FROM marks ORDER BY at_ms").fetchall()
+        out = {}
+        for r in rows:
+            out.setdefault(r["video_id"], []).append(r["at_ms"])
+        return out
+
+    # ------------------------------------------------------------ statistics
+    def add_play_seconds(self, seconds):
+        day = time.strftime("%Y-%m-%d")
+        with self.lock, self.conn:
+            self.conn.execute("INSERT INTO play_log(day, seconds) VALUES(?, ?) "
+                              "ON CONFLICT(day) DO UPDATE SET seconds=seconds+excluded.seconds",
+                              (day, max(0, min(120, int(seconds)))))
+
+    def add_edge_game(self, edges, seconds, longest):
+        with self.lock, self.conn:
+            self.conn.execute("INSERT OR REPLACE INTO edge_games(at, edges, seconds, longest) VALUES(?, ?, ?, ?)",
+                              (time.time(), int(edges), int(seconds), int(longest)))
+
+    def stats(self):
+        """Numbers for the statistics page."""
+        videos = self.videos()
+        by_id = {v["id"]: v for v in videos}
+        with self.lock:
+            days = {r["day"]: r["seconds"] for r in self.conn.execute("SELECT day, seconds FROM play_log")}
+            sessions = self.conn.execute(
+                "SELECT COUNT(*) AS n, COALESCE(SUM(play_count), 0) AS played FROM sessions").fetchone()
+            feedback = {r["kind"]: r["n"] for r in self.conn.execute(
+                "SELECT kind, COUNT(*) AS n FROM feedback GROUP BY kind")}
+            games = [dict(r) for r in self.conn.execute(
+                "SELECT at, edges, seconds, longest FROM edge_games ORDER BY at DESC LIMIT 20")]
+            marks = self.conn.execute("SELECT COUNT(*) FROM marks").fetchone()[0]
+        today = time.time()
+        week = [time.strftime("%Y-%m-%d", time.localtime(today - 86400 * d)) for d in range(6, -1, -1)]
+        played = [v for v in videos if v["playCount"]]
+        categories = {}
+        for v in played:
+            categories[v["category"]] = categories.get(v["category"], 0) + v["playCount"]
+        return {
+            "totalSeconds": sum(days.values()),
+            "week": [{"day": d, "seconds": days.get(d, 0)} for d in week],
+            "sessions": sessions["n"], "sessionsPlayed": sessions["played"],
+            "topVideos": [{"id": v["id"], "title": v["title"], "plays": v["playCount"]}
+                          for v in sorted(played, key=lambda v: -v["playCount"])[:10]],
+            "topCategories": sorted(({"name": k, "plays": n} for k, n in categories.items()),
+                                    key=lambda c: -c["plays"])[:8],
+            "feedback": feedback, "marks": marks,
+            "liked": [{"id": vid, "title": by_id[vid]["title"]} for vid, t in sorted(
+                self.taste().items(), key=lambda kv: -kv[1].get("score", 0))[:5]
+                if vid in by_id and t.get("score", 0) > 0.2],
+            "edgeGames": games,
+            "videosUsed": len(played), "videosUsable": sum(1 for v in videos if v["hasScript"] and v["playable"]),
+        }
+
+    # ------------------------------------------------------------ backup
+    def backup(self):
+        """Everything the user made or chose, by video path (ids differ between databases)."""
+        with self.lock:
+            q = lambda sql: [dict(r) for r in self.conn.execute(sql)]  # noqa: E731
+            settings = {r["key"]: r["value"] for r in q("SELECT key, value FROM settings")
+                        if r["key"] not in ("remote_key",)}
+            videos = q("SELECT id, path, rating, meta_edit, use_auto, play_count, last_played FROM videos")
+            paths = {v["id"]: v["path"] for v in videos}
+            feedback = q("SELECT video_id, start_ms, end_ms, kind, score, at FROM feedback")
+            marks = q("SELECT video_id, at_ms, created_at FROM marks")
+            sessions = q("SELECT name, created_at, total_ms, params, clips, actions, play_count, vib FROM sessions")
+            play_log = q("SELECT day, seconds FROM play_log")
+            games = q("SELECT at, edges, seconds, longest FROM edge_games")
+        for row in feedback + marks:
+            row["path"] = paths.get(row.pop("video_id"))
+        for s in sessions:  # clips point at videos by id: add the path so they can be matched again
+            clips = json.loads(s["clips"])
+            for c in clips:
+                c["path"] = paths.get(c["videoId"])
+            s["clips"] = json.dumps(clips)
+        keep = [{k: v for k, v in r.items() if k != "id"} for r in videos
+                if r["rating"] or r["meta_edit"] or r["use_auto"] or r["play_count"]]
+        return {"app": "Funscript Session", "version": 1, "created": time.time(), "settings": settings,
+                "videos": keep, "feedback": [r for r in feedback if r["path"]],
+                "marks": [r for r in marks if r["path"]], "sessions": sessions,
+                "playLog": play_log, "edgeGames": games}
+
+    def restore(self, data):
+        """Merge a backup into this database: nothing already here is removed."""
+        if not isinstance(data, dict) or data.get("app") != "Funscript Session":
+            raise ValueError("Det er ikke en backup fra Funscript Session")
+        counts = {"videos": 0, "sessions": 0, "marks": 0, "feedback": 0}
+        with self.lock, self.conn:
+            ids = {r["path"]: r["id"] for r in self.conn.execute("SELECT id, path FROM videos")}
+            for key, value in (data.get("settings") or {}).items():
+                if key != "remote_key":
+                    self.conn.execute("INSERT OR REPLACE INTO settings(key, value) VALUES(?, ?)", (key, value))
+            for v in data.get("videos") or []:
+                vid = ids.get(v.get("path"))
+                if vid:
+                    self.conn.execute(
+                        "UPDATE videos SET rating=?, meta_edit=?, use_auto=?, play_count=MAX(play_count, ?), "
+                        "last_played=COALESCE(?, last_played) WHERE id=?",
+                        (v.get("rating") or 0, v.get("meta_edit"), v.get("use_auto") or 0,
+                         v.get("play_count") or 0, v.get("last_played"), vid))
+                    counts["videos"] += 1
+            for f in data.get("feedback") or []:
+                vid = ids.get(f.get("path"))
+                if vid and not self.conn.execute("SELECT 1 FROM feedback WHERE video_id=? AND at=? AND kind=?",
+                                                 (vid, f["at"], f["kind"])).fetchone():
+                    self.conn.execute("INSERT INTO feedback(video_id, start_ms, end_ms, kind, score, at) "
+                                      "VALUES(?, ?, ?, ?, ?, ?)",
+                                      (vid, f["start_ms"], f["end_ms"], f["kind"], f["score"], f["at"]))
+                    counts["feedback"] += 1
+            for m in data.get("marks") or []:
+                vid = ids.get(m.get("path"))
+                if vid and not self.conn.execute("SELECT 1 FROM marks WHERE video_id=? AND at_ms=?",
+                                                 (vid, m["at_ms"])).fetchone():
+                    self.conn.execute("INSERT INTO marks(video_id, at_ms, created_at) VALUES(?, ?, ?)",
+                                      (vid, m["at_ms"], m["created_at"]))
+                    counts["marks"] += 1
+            for s in data.get("sessions") or []:
+                if self.conn.execute("SELECT 1 FROM sessions WHERE name=? AND created_at=?",
+                                     (s["name"], s["created_at"])).fetchone():
+                    continue
+                clips = json.loads(s["clips"])
+                if not all(ids.get(c.get("path")) for c in clips):
+                    continue  # a video it uses is not in this library
+                for c in clips:
+                    c["videoId"] = ids[c.pop("path")]
+                self.conn.execute(
+                    "INSERT INTO sessions(name, created_at, total_ms, params, clips, actions, play_count, vib) "
+                    "VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
+                    (s["name"], s["created_at"], s["total_ms"], s["params"], json.dumps(clips), s["actions"],
+                     s["play_count"], s["vib"]))
+                counts["sessions"] += 1
+            for p in data.get("playLog") or []:
+                self.conn.execute("INSERT INTO play_log(day, seconds) VALUES(?, ?) ON CONFLICT(day) "
+                                  "DO UPDATE SET seconds=MAX(seconds, excluded.seconds)", (p["day"], p["seconds"]))
+            for g in data.get("edgeGames") or []:
+                self.conn.execute("INSERT OR IGNORE INTO edge_games(at, edges, seconds, longest) VALUES(?, ?, ?, ?)",
+                                  (g["at"], g["edges"], g["seconds"], g["longest"]))
+        return counts
 
     def set_meta(self, video_id, data):
         """Save edited metadata (title, actors, genres, studio, year) in the database; the .nfo
@@ -1518,6 +1688,8 @@ def _best_window(video, length_ms, target, used_ranges, max_speed=None, prev_amp
             score += 0.8 * _tempo_distance(_mean_amp(rates[i:j]), prev_rate)
         if duration > 3 * length_ms and (start < duration * 0.04 or end > duration * 0.96):
             score += 0.25                                    # intros and credits
+        if video.get("marks"):                               # favourite spots (B while playing)
+            score -= 0.35 * min(2, sum(1 for m in video["marks"] if start <= m < end))
         if best is None or score < best[3]:
             best = (start, end, avg, score)
     return best
@@ -1687,6 +1859,8 @@ class ClipPicker:
                 score += 2.0                                  # only if nothing else fits
             if v.get("rating", 0) > 0:
                 score -= 0.12                                 # favourites first
+            if v.get("marks"):
+                score -= 0.06                                 # videos with favourite spots
             score -= 0.05 * self.taste.get(v["id"], {}).get("score", 0)  # learned: softer than ★
             if prev_video is not None and v["id"] != prev_video["id"] and _related(v, prev_video):
                 score -= 0.05                                 # a natural follow-up

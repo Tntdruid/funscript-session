@@ -154,6 +154,23 @@ ekstrem hastighed eller meget stilstand.
 **Forhåndsvisning:** Hold musen over et kort i gitteret – videoen spiller lydløst og springer
 gennem fire steder; en hvid markør på hastighedskurven viser hvor.
 
+**⭐ Yndlingssteder:** Tryk ⭐ eller B (eller ⭐ på mobilen) mens noget spiller, du kan lide. Sessioner
+vælger derefter oftere netop den del af videoen (og videoer med ⭐ lidt oftere). Kan fortrydes.
+
+**∞ Uendelig:** Med ∞ slået til bygges en lignende session med nye klip 1½ minut før slutningen, og den
+tager over, når den gamle slutter, så det bare fortsætter, indtil du stopper.
+
+**🎯 Edge-spil:** 🎯 ved siden af "Byg session" bygger en opbyggende session. Tryk "😮 Tæt på" (E, eller
+på mobilen), når du er tæt på: enhederne holder pause (20 s, lidt længere hver gang), de næste klip
+vælges roligere, og så bygger den op igen. Til sidst ser du, hvor mange gange og hvor længe du holdt.
+
+**Forhåndsvisning:** Hold musen over et klip i klip-stribe for at se netop det klip (uden lyd).
+
+**📊 Statistik og backup:** Spilletid (i alt og de sidste 7 dage), sessioner, mest brugte videoer og
+kategorier, hvor mange klip du ser færdig, ⭐-steder og edge-spil. "💾 Gem backup" gemmer alt, du har
+lavet og valgt (også opsætninger) i én fil; "📂 Gendan backup" lægger den sammen med det, der er her,
+uden at slette noget. Handy-nøgler kommer ikke med i backuppen.
+
 **Gemte opsætninger:** "＋ Gem opsætning" over "Byg session" gemmer dine valg (længde, forløb,
 hastighed, kategorier, opvarmning, overraskelser osv.) som en knap; ét tryk sætter dem og bygger.
 

@@ -652,9 +652,11 @@ const PREVIEW_POINTS = [0.15, 0.38, 0.62, 0.85];
 let previewTimer = null;
 let preview = null; // { card, video, timer }
 
-function startPreview(card, v) {
+function startPreview(card, v, range = null) {
   stopPreview();
   if (!card.isConnected || !v.durationMs) return;
+  const from = range ? range.startMs / 1000 : 0;
+  const span = range ? (range.endMs - range.startMs) / 1000 : v.durationMs / 1000;
   const video = document.createElement('video');
   video.className = 'preview';
   video.muted = true;
@@ -664,7 +666,7 @@ function startPreview(card, v) {
   let step = 0;
   const jump = () => {
     const f = PREVIEW_POINTS[step % PREVIEW_POINTS.length];
-    video.currentTime = (v.durationMs / 1000) * f;
+    video.currentTime = from + span * f;
     if (marker) { marker.hidden = false; marker.style.left = `${f * 100}%`; }
     step += 1;
   };
@@ -675,7 +677,7 @@ function startPreview(card, v) {
     preview.timer = setInterval(jump, 2500);
   }, { once: true });
   video.src = `/media/${v.id}`;
-  card.querySelector('.poster').appendChild(video);
+  (card.querySelector('.poster') || card).appendChild(video);
   preview = { card, video, timer: null, marker };
 }
 
@@ -864,11 +866,12 @@ function setChip(container, button) {
   container.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === button));
 }
 
-async function buildSession() {
+async function buildSession(overrides = {}) {
+  const extra = overrides instanceof Event ? {} : overrides;
   const ids = selectedIds();
   if (!ids.length) {
     ui.buildStatus.textContent = t('Vælg mindst én video med script');
-    return;
+    return false;
   }
   ui.buildBtn.disabled = true;
   ui.buildStatus.textContent = t('Bygger…');
@@ -888,13 +891,17 @@ async function buildSession() {
         curve: state.curve,
         videoIds: ids.length === state.library.filter((v) => v.hasScript && v.playable).length ? null : ids,
         seed: Math.floor(Math.random() * 1e9),
+        ...extra,
       },
     });
     ui.buildStatus.textContent = t('{a} klip fra {b} videoer', { a: session.clips.length, b: new Set(session.clips.map((c) => c.videoId)).size });
     await loadSessions();
-    openSession(session);
+    if (state.edge && !extra.curve) endEdgeGame();
+    await openSession(session);
+    return true;
   } catch (err) {
     ui.buildStatus.textContent = err.message;
+    return false;
   } finally {
     ui.buildBtn.disabled = false;
   }
@@ -1142,7 +1149,14 @@ function renderClipStrip() {
           ${Math.round(clip.speed)} u/s · ${fmtTime(clip.endMs - clip.startMs)}</div>
       </div>`;
     card.querySelector('img').addEventListener('error', (e) => e.target.classList.add('missing'));
-    card.addEventListener('click', () => goToClip(i, 0));
+    card.addEventListener('click', () => { stopPreview(); goToClip(i, 0); });
+    if (v?.playable) {  // hover: a muted look at exactly this clip
+      card.addEventListener('mouseenter', () => {
+        clearTimeout(previewTimer);
+        previewTimer = setTimeout(() => startPreview(card, v, clip), 400);
+      });
+      card.addEventListener('mouseleave', () => { clearTimeout(previewTimer); stopPreview(); });
+    }
     card.insertAdjacentHTML('beforeend', `
       <div class="clip-actions">
         <button class="swap" title="${t('Byt med et andet klip i samme hastighed')}">🔄</button>
@@ -1786,12 +1800,15 @@ function tick() {
           goToClip(state.clipIndex + 1);
         } else {
           state.sessionTime = state.session.totalMs;
+          if (endlessContinue()) return;
           if (!coachMarks.end) { coachMarks.end = true; cue('end', true); }
           setPlaying(false);
+          endEdgeGame();
         }
       }
     }
     driveDevice(state.sessionTime);
+    endlessTick();
     checkHandyDrift();
     if (state.playing) savePosition();
     coachTick();
@@ -2420,6 +2437,7 @@ function startRemoteLoops() {
         session: s?.name || '', clip: clip ? `${t('Klip {i}/{n}', { i: state.clipIndex + 1, n: s.clips.length })} · ${clip.name}` : '',
         time: state.sessionTime || 0, total: s?.totalMs || 0, playing: state.playing, hold: !!state.hold,
         rate: state.rate, volume: Number(ui.volume.value),
+        edge: state.edge ? { edges: state.edge.edges, resting: state.edge.resting } : null,
       } }).catch(() => {});
       if (n % 10 === 9) api('/api/remote').then(showRemote).catch(() => {});
       await new Promise((r) => setTimeout(r, 1000));
@@ -2445,6 +2463,8 @@ function runRemote(command) {
     louder: () => volume(0.1),
     quieter: () => volume(-0.1),
     hold: () => toggleHold(),
+    edge: edgeNow,
+    mark: markSpot,
   }[command] || (() => {}))();
 }
 
@@ -2561,6 +2581,239 @@ $('calibPlus').addEventListener('click', () => nudgeCalib(20));
 $('calibDone').addEventListener('click', () => closeCalib(true));
 $('calibCancel').addEventListener('click', () => closeCalib(false));
 $('holdBtn').addEventListener('click', () => toggleHold());
+// ------------------------------------------------------------------ ⭐ favourite spots
+/** B / ⭐: remember the spot playing now; sessions then like to use that part of the video. */
+async function markSpot() {
+  const clip = state.session?.clips[state.clipIndex];
+  if (!clip) return;
+  const at = Math.round(players[active].currentTime * 1000);
+  const v = videoInfo(clip.videoId);
+  try {
+    const { id } = await api(`/api/videos/${clip.videoId}/marks`, { method: 'POST', body: { at } });
+    if (v) v.marks = [...(v.marks || []), at];
+    $('markBtn').classList.add('flash');
+    setTimeout(() => $('markBtn').classList.remove('flash'), 600);
+    showToast(t('⭐ Sted markeret ({time} i "{name}")', { time: fmtTime(at), name: v?.title || clip.name }), {
+      undo: () => {
+        api(`/api/marks/${id}/delete`, { method: 'POST', body: {} }).catch(() => {});
+        if (v) v.marks = (v.marks || []).filter((m) => m !== at);
+      },
+    });
+  } catch (err) {
+    showToast(err.message);
+  }
+}
+
+// ------------------------------------------------------------------ ∞ endless
+// Shortly before the end a similar session (other clips) is built; at the end it takes over.
+state.endless = loadJson('endless', false);
+let endlessNext = null;
+let endlessBusy = false;
+
+function showEndless() {
+  $('endlessBtn').classList.toggle('on', state.endless);
+}
+
+function endlessTick() {
+  const s = state.session;
+  if (!state.endless || !state.playing || !s || endlessBusy || endlessNext?.from === s.id) return;
+  if (s.totalMs - state.sessionTime > 90000) return;
+  endlessBusy = true;
+  api(`/api/sessions/${s.id}/similar`, { method: 'POST', body: { seed: Math.floor(Math.random() * 1e9) } })
+    .then((next) => { endlessNext = { from: s.id, session: next }; loadSessions(); })
+    .catch(() => {})
+    .finally(() => { endlessBusy = false; });
+}
+
+/** At the end of a session: go on with the prepared one. Returns true when it did. */
+function endlessContinue() {
+  if (!state.endless || endlessNext?.from !== state.session?.id) return false;
+  const next = endlessNext.session;
+  endlessNext = null;
+  showToast(t('∞ Fortsætter med nye klip'));
+  openSession(next).then(() => setPlaying(true));
+  return true;
+}
+
+$('endlessBtn').addEventListener('click', () => {
+  state.endless = !state.endless;
+  saveJson('endless', state.endless);
+  showEndless();
+  showToast(state.endless ? t('∞ Uendelig: fortsætter med nye klip, når sessionen slutter') : t('∞ Uendelig er slået fra'));
+});
+showEndless();
+
+// ------------------------------------------------------------------ 🎯 edge game
+// Builds up; "tæt på" holds the devices still for a rest that grows each time, then the coming
+// clips are re-picked calmer and it builds up again. The result goes into the statistics.
+state.edge = null;
+
+function renderEdge() {
+  const e = state.edge;
+  $('edgePanel').hidden = !e;
+  if (!e) return;
+  $('edgeCount').textContent = `🎯 ${e.edges}`;
+  $('edgeNowBtn').disabled = e.resting > 0;
+  $('edgeNowBtn').textContent = e.resting > 0 ? t('Hvil {n} s', { n: e.resting }) : `😮 ${t('Tæt på')}`;
+  $('edgeText').textContent = e.resting > 0 ? t('Pause. Den bygger op igen bagefter.')
+    : e.edges ? t('{n} gange indtil nu. Længst uden pause: {time}', { n: e.edges, time: fmtTime(e.longest * 1000) })
+      : t('Tryk når du er tæt på – så holder den pause og bygger op igen.');
+}
+
+async function startEdgeGame() {
+  const built = await buildSession({ curve: 'ramp' });
+  if (!built) return;
+  state.edge = { edges: 0, started: performance.now(), lastEdge: performance.now(), longest: 0, resting: 0, timer: 0 };
+  renderEdge();
+  showToast(t('🎯 Edge-spil: tryk ▶ for at starte. Tryk "Tæt på" (E) når du er tæt på.'));
+}
+
+function edgeNow() {
+  const e = state.edge;
+  if (!e || e.resting > 0 || !state.playing) return;
+  const now = performance.now();
+  e.edges += 1;
+  e.longest = Math.max(e.longest, Math.round((now - e.lastEdge) / 1000));
+  e.resting = Math.min(60, 15 + 5 * e.edges);
+  toggleHold(true);
+  cue('pause', true);
+  renderEdge();
+  e.timer = setInterval(() => {
+    e.resting -= 1;
+    if (e.resting <= 0) {
+      clearInterval(e.timer);
+      e.resting = 0;
+      e.lastEdge = performance.now();
+      toggleHold(false);
+      steer('less');  // the next clips calmer, the session builds up again from there
+    }
+    renderEdge();
+  }, 1000);
+}
+
+function endEdgeGame() {
+  const e = state.edge;
+  if (!e) return;
+  clearInterval(e.timer);
+  if (e.resting > 0) toggleHold(false);
+  state.edge = null;
+  renderEdge();
+  const seconds = Math.round((performance.now() - e.started) / 1000);
+  if (e.edges || seconds > 60) {
+    api('/api/stats/edge', { method: 'POST', body: { edges: e.edges, seconds, longest: e.longest } }).catch(() => {});
+    showToast(t('🎯 {n} gange tæt på på {time}. Længst uden pause: {long}', {
+      n: e.edges, time: fmtTime(seconds * 1000), long: fmtTime(e.longest * 1000) }), { ms: 12000 });
+  }
+}
+
+$('edgeBtn').addEventListener('click', startEdgeGame);
+$('edgeNowBtn').addEventListener('click', edgeNow);
+$('edgeEndBtn').addEventListener('click', endEdgeGame);
+
+// ------------------------------------------------------------------ 📊 statistics + backup
+let playTicked = 0;
+setInterval(() => {  // played time, in 30 s steps
+  if (!state.playing) return;
+  playTicked += 30;
+  api('/api/stats/tick', { method: 'POST', body: { seconds: 30 } }).catch(() => {});
+}, 30000);
+
+function fmtHours(seconds) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.round((seconds % 3600) / 60);
+  return h ? `${h} t ${m} min` : `${m} min`;
+}
+
+async function openStats() {
+  $('statsDialog').showModal();
+  $('statsBody').textContent = t('Henter…');
+  try {
+    const s = await api('/api/stats');
+    const weekMax = Math.max(60, ...s.week.map((d) => d.seconds));
+    const dayName = (d) => new Date(`${d}T12:00`).toLocaleDateString(LANG === 'da' ? 'da-DK' : 'en-GB', { weekday: 'short' });
+    const fb = s.feedback || {};
+    const finished = fb.complete || 0;
+    const skipped = (fb.skip || 0) + (fb.swap || 0) + (fb.remove || 0);
+    const best = s.edgeGames.reduce((b, g) => (g.edges > (b?.edges ?? -1) ? g : b), null);
+    const list = (items, label) => (items.length
+      ? `<ol class="stat-list">${items.map(label).join('')}</ol>` : `<p class="hint">${t('Intet endnu')}</p>`);
+    $('statsBody').innerHTML = `
+      <div class="stat-tiles">
+        <div class="stat-tile"><b>${fmtHours(s.totalSeconds)}</b><span>${t('spilletid i alt')}</span></div>
+        <div class="stat-tile"><b>${fmtHours(s.week.reduce((a, d) => a + d.seconds, 0))}</b><span>${t('de sidste 7 dage')}</span></div>
+        <div class="stat-tile"><b>${s.sessions}</b><span>${t('sessioner bygget · {n} afspillet', { n: s.sessionsPlayed })}</span></div>
+        <div class="stat-tile"><b>${s.videosUsed} / ${s.videosUsable}</b><span>${t('videoer brugt')}</span></div>
+        <div class="stat-tile"><b>${finished ? Math.round((finished / (finished + skipped)) * 100) : 0}%</b><span>${t('klip set færdig ({a} færdig, {b} sprunget over)', { a: finished, b: skipped })}</span></div>
+        <div class="stat-tile"><b>⭐ ${s.marks}</b><span>${t('markerede steder')}</span></div>
+        ${best ? `<div class="stat-tile"><b>🎯 ${best.edges}</b><span>${t('bedste edge-spil ({n} spil i alt)', { n: s.edgeGames.length })}</span></div>` : ''}
+      </div>
+      <h4 class="stats-h">${t('Spilletid de sidste 7 dage')}</h4>
+      <div class="week">${s.week.map((d) => `<div title="${fmtHours(d.seconds)}"><span>${d.seconds >= 60 ? Math.round(d.seconds / 60) : ''}</span><i style="height:${(d.seconds / weekMax) * 80}%"></i>${dayName(d.day)}</div>`).join('')}</div>
+      <div class="help-cols">
+        <div><h4 class="stats-h">${t('Mest brugte videoer')}</h4>
+          ${list(s.topVideos, (v) => `<li>${escapeHtml(v.title)} <span class="n">${v.plays}×</span></li>`)}</div>
+        <div><h4 class="stats-h">${t('Mest brugte kategorier')}</h4>
+          ${list(s.topCategories, (c) => `<li>${escapeHtml(t(c.name))} <span class="n">${c.plays}×</span></li>`)}
+          <h4 class="stats-h">${t('Appen har lært, at du kan lide')}</h4>
+          ${list(s.liked, (v) => `<li>${escapeHtml(v.title)}</li>`)}</div>
+      </div>
+      ${s.edgeGames.length ? `<h4 class="stats-h">${t('Seneste edge-spil')}</h4>
+        ${list(s.edgeGames.slice(0, 5), (g) => `<li>${new Date(g.at * 1000).toLocaleDateString(LANG === 'da' ? 'da-DK' : 'en-GB')}: 🎯 ${g.edges} · ${fmtTime(g.seconds * 1000)} · ${t('længst uden pause {t}', { t: fmtTime(g.longest * 1000) })}</li>`)}` : ''}`;
+  } catch (err) {
+    $('statsBody').textContent = err.message;
+  }
+}
+
+const BROWSER_SKIP = ['handyAppId', 'handyKey'];  // keys stay in this browser only
+
+async function saveBackup() {
+  try {
+    const data = await api('/api/backup');
+    const browser = {};
+    try {
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (!BROWSER_SKIP.includes(key)) browser[key] = localStorage.getItem(key);
+      }
+    } catch { /* no storage */ }
+    data.browser = browser;
+    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `funscript-session-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    showToast(t('Backup gemt i din Overførsler-mappe'));
+  } catch (err) {
+    showToast(err.message);
+  }
+}
+
+async function restoreBackup(file) {
+  try {
+    const data = JSON.parse(await file.text());
+    const { restored } = await api('/api/restore', { method: 'POST', body: { backup: data } });
+    try {
+      Object.entries(data.browser || {}).forEach(([k, v]) => { if (!BROWSER_SKIP.includes(k)) localStorage.setItem(k, v); });
+    } catch { /* no storage */ }
+    showToast(t('Gendannet: {s} sessioner, {v} videoer, {m} ⭐-steder. Genindlæser…', {
+      s: restored.sessions, v: restored.videos, m: restored.marks }));
+    setTimeout(() => location.reload(), 2000);
+  } catch (err) {
+    showToast(err instanceof SyntaxError ? t('Filen er ikke en backup') : err.message);
+  }
+}
+
+$('statsBtn').addEventListener('click', openStats);
+$('statsClose').addEventListener('click', () => $('statsDialog').close());
+$('backupBtn').addEventListener('click', saveBackup);
+$('restoreBtn').addEventListener('click', () => $('restoreFile').click());
+$('restoreFile').addEventListener('change', () => {
+  const file = $('restoreFile').files[0];
+  $('restoreFile').value = '';
+  if (file) restoreBackup(file);
+});
+$('markBtn').addEventListener('click', markSpot);
 
 // ------------------------------------------------------------------ toast with "Fortryd"
 let toastTimer = null;
@@ -2719,7 +2972,7 @@ ui.offsetSlider.addEventListener('change', () => { saveJson(offsetKey(), Number(
 }));
 
 document.addEventListener('keydown', (e) => {
-  if (meta.dialog.open || $('helpDialog').open) return; // dialogs handle their own keys (Esc closes them)
+  if (meta.dialog.open || $('helpDialog').open || $('statsDialog').open) return; // dialogs handle their own keys (Esc closes them)
   if (e.key === '?' && !e.target.matches('input, textarea')) { e.preventDefault(); openHelp(); return; }
   if (calib) {
     if (e.code === 'Escape') closeCalib(false);
@@ -2740,6 +2993,8 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'ArrowDown') { e.preventDefault(); steer('less'); }
   if (e.code === 'KeyF') toggleFullscreen();
   if (e.code === 'KeyH') toggleHold();
+  if (e.code === 'KeyB') markSpot();
+  if (e.code === 'KeyE') edgeNow();
   if (e.code === 'BracketLeft') setRate(state.rate - 0.05, true);
   if (e.code === 'BracketRight') setRate(state.rate + 0.05, true);
 });

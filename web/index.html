@@ -12,6 +12,7 @@
         <div class="brand-row">
           <div class="brand">Funscript <span>Session</span></div>
           <div class="brand-tools">
+            <button id="statsBtn" class="help-btn" title="Statistik og backup">📊</button>
             <button id="helpBtn" class="help-btn" title="Hjælp og tastaturgenveje (?)">?</button>
             <div class="lang-switch" title="Sprog / Language">
               <button data-lang="da">DA</button><button data-lang="en">EN</button>
@@ -79,6 +80,12 @@
             </div>
           </div>
 
+          <div class="edge-panel" id="edgePanel" hidden>
+            <span class="edge-count" id="edgeCount">🎯 0</span>
+            <span class="edge-text" id="edgeText">Tryk når du er tæt på – så holder den pause og bygger op igen.</span>
+            <button id="edgeNowBtn" class="primary" title="Tæt på (E)">😮 Tæt på</button>
+            <button id="edgeEndBtn" title="Afslut edge-spillet">Afslut</button>
+          </div>
           <div class="transport">
             <button id="prevBtn" title="Forrige klip">⏮</button>
             <button id="playBtn" class="primary" title="Afspil / pause (mellemrum)">▶</button>
@@ -96,6 +103,8 @@
             </label>
             <input id="volume" type="range" min="0" max="1" step="0.05" value="0.6" title="Lydstyrke" />
             <button id="levelBtn" class="level-btn on" title="Udjævn lydstyrke mellem videoer">≋</button>
+            <button id="markBtn" class="level-btn" title="Markér et sted, du kan lide (B). Det bliver brugt oftere i sessioner">⭐</button>
+            <button id="endlessBtn" class="level-btn" title="Uendelig: når sessionen slutter, fortsætter den med nye klip">∞</button>
             <button id="holdBtn" class="level-btn" title="Hold stille: Handy og vibratorer står stille, videoen kører videre (H)">✋</button>
             <button id="cueBtn" class="level-btn" title="Lyd-signaler ved temposkift, pauser og finale">🔔</button>
             <button id="fullscreenBtn" title="Fuldskærm (F eller dobbeltklik på videoen)">⛶</button>
@@ -178,6 +187,7 @@
             <div class="presets" id="presets"></div>
             <div class="build-row">
               <button id="buildBtn" class="primary wide build-btn">Byg session</button>
+              <button id="edgeBtn" class="build-btn dice" title="Edge-spil: bygger op, du siger til når du er tæt på, og den holder pause og bygger op igen">🎯</button>
               <button id="surpriseBtn" class="build-btn dice" title="Overrask mig: tilfældigt forløb, hastighed og kategori">🎲</button>
             </div>
             <div class="hint" id="buildStatus"></div>
@@ -339,6 +349,20 @@
       <span id="toastText"></span>
       <button id="toastUndo">Fortryd</button>
     </div>
+    <dialog class="meta-dialog help-dialog" id="statsDialog">
+      <h3>Statistik</h3>
+      <div id="statsBody" class="stats-body">Henter…</div>
+      <h4 class="stats-h">Dine data</h4>
+      <p class="hint">Favoritter, "brug aldrig", det appen har lært, rettet metadata, ⭐-steder, sessioner, statistik og
+        dine gemte opsætninger i én fil. Gendan lægger den sammen med det, der allerede er her; intet bliver slettet.</p>
+      <div class="meta-buttons">
+        <button id="backupBtn">💾 Gem backup</button>
+        <button id="restoreBtn">📂 Gendan backup</button>
+        <input type="file" id="restoreFile" accept=".json,application/json" hidden />
+        <span class="spacer"></span>
+        <button class="primary" id="statsClose">Luk</button>
+      </div>
+    </dialog>
     <dialog class="meta-dialog help-dialog" id="helpDialog">
       <h3>Hjælp og genveje</h3>
       <div class="help-cols">
@@ -351,6 +375,8 @@
             <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Hårdere / roligere resten af sessionen</td></tr>
             <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>Tempo ned / op</td></tr>
             <tr><td><kbd>H</kbd></td><td>Hold stille (enhederne står stille, videoen kører)</td></tr>
+            <tr><td><kbd>B</kbd></td><td>Markér et sted, du kan lide</td></tr>
+            <tr><td><kbd>E</kbd></td><td>Tæt på (i edge-spillet)</td></tr>
             <tr><td><kbd>F</kbd></td><td>Fuldskærm (eller dobbeltklik på videoen)</td></tr>
             <tr><td><kbd>Esc</kbd></td><td>Luk billeder, kalibrering og vinduer</td></tr>
             <tr><td><kbd>?</kbd></td><td>Denne hjælp</td></tr>
@@ -361,6 +387,10 @@
           <table class="keys">
             <tr><td>▼ ▲ ⏹</td><td>Roligere, hårdere eller finale nu: vælger nye klip efter det, der spiller</td></tr>
             <tr><td>✋</td><td>Hold stille</td></tr>
+            <tr><td>⭐</td><td>Markér et sted, du kan lide: det bliver brugt oftere</td></tr>
+            <tr><td>∞</td><td>Uendelig: fortsætter med nye klip, når sessionen slutter</td></tr>
+            <tr><td>🎯</td><td>Edge-spil</td></tr>
+            <tr><td>📊</td><td>Statistik og backup</td></tr>
             <tr><td>≋</td><td>Udjævn lydstyrken mellem videoer</td></tr>
             <tr><td>🔔</td><td>Lyd-signaler eller stemme ved temposkift og finale</td></tr>
             <tr><td>🎲</td><td>Overrask mig: tilfældig session</td></tr>

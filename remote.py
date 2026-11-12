@@ -16,7 +16,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 COMMANDS = {"toggle", "next", "prev", "more", "less", "finish", "faster", "slower",
-            "louder", "quieter", "hold"}
+            "louder", "quieter", "hold", "edge", "mark"}
 
 
 def lan_ip():

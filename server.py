@@ -51,6 +51,8 @@ MESSAGES_EN = {
     "Videoen har ingen script at lave vib ud fra": "The video has no script to make vib from",
     "Fandt ikke nok beats i musikken": "Found too few beats in the music",
     "Ukendt video": "Unknown video",
+    "Det er ikke en backup fra Funscript Session": "This is not a Funscript Session backup",
+    "Backup-filen kunne ikke læses": "The backup file could not be read",
 }
 
 
@@ -118,6 +120,18 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json({"status": "ok", "root": str(ROOT)})
         if path == "/api/remote":
             return self.send_json(REMOTE.info())
+        if path == "/api/stats":
+            return self.send_json(LIBRARY.stats())
+        if path == "/api/backup":  # everything the user made, as a file to keep
+            body = json.dumps(LIBRARY.backup(), ensure_ascii=False).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Disposition",
+                             f'attachment; filename="funscript-session-backup-{time.strftime("%Y-%m-%d")}.json"')
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if path == "/api/remote/wait":  # long-poll: commands from the phone for this page
             return self.send_json({"commands": REMOTE.wait(20)})
         if path == "/api/settings":
@@ -233,6 +247,25 @@ class Handler(SimpleHTTPRequestHandler):
                 LIBRARY.set_setting("remote_enabled", "1" if data.get("enabled") else "0")
                 REMOTE.start() if data.get("enabled") else REMOTE.stop()
             return self.send_json(REMOTE.info())
+        if path == "/api/stats/tick":  # seconds played since the last tick
+            LIBRARY.add_play_seconds(data.get("seconds", 0))
+            return self.send_json({"ok": True})
+        if path == "/api/stats/edge":  # a finished edge game
+            LIBRARY.add_edge_game(data.get("edges", 0), data.get("seconds", 0), data.get("longest", 0))
+            return self.send_json({"ok": True})
+        if path == "/api/restore":
+            try:
+                return self.send_json({"restored": LIBRARY.restore(data.get("backup"))})
+            except (ValueError, KeyError, TypeError) as exc:
+                return self.send_json({"error": str(exc) if isinstance(exc, ValueError)
+                                       else "Backup-filen kunne ikke læses"}, 400)
+        m = re.fullmatch(r"/api/videos/(\d+)/marks", path)
+        if m:  # favourite spot (B while playing)
+            return self.send_json({"id": LIBRARY.add_mark(int(m.group(1)), data.get("at", 0))})
+        m = re.fullmatch(r"/api/marks/(\d+)/delete", path)
+        if m:
+            LIBRARY.delete_mark(int(m.group(1)))
+            return self.send_json({"ok": True})
         if path == "/api/remote/status":  # state of this page, shown on the phone
             REMOTE.set_status(data)
             return self.send_json({"ok": True})
