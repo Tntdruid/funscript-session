@@ -283,8 +283,30 @@ function genButton(v) {
     : '';
 }
 
+/** "auto" badge, a switch between original and auto script, or a button to make an auto script. */
 function autoBadge(v) {
+  if (v.hasOriginal && v.hasAuto) {
+    const to = v.autoScript ? 'original' : 'auto';
+    const title = v.autoScript ? t('Bruger auto-scriptet. Klik for at bruge originalen')
+      : t('Bruger originalen. Klik for at bruge auto-scriptet');
+    return `<button class="script-switch${v.autoScript ? ' on' : ''}" data-use-script="${v.id}" data-to="${to}" title="${title}">${v.autoScript ? 'auto' : t('original')} ⇄</button>`;
+  }
+  if (v.canMakeAuto) {
+    return `<button class="gen-btn" data-gen="${v.id}" title="${t('Lav et nyt script ud fra musikkens beat. Originalen bliver ikke rørt, og du kan skifte tilbage')}">🎵 ${t('Nyt script')}</button>`;
+  }
   return v.autoScript ? `<span class="auto-badge" title="${t('Scriptet er lavet automatisk ud fra musikken')}">auto</span>` : '';
+}
+
+async function useScript(id, to, button) {
+  button.disabled = true;
+  try {
+    await api(`/api/videos/${id}/script`, { method: 'POST', body: { use: to } });
+    await loadLibrary();
+    renderGrid();
+  } catch (err) {
+    button.disabled = false;
+    alert(err.message);
+  }
 }
 
 /** Start making a beat script and wait for it; the library reloads when it is done. */
@@ -312,6 +334,12 @@ async function generateScript(id, button) {
 }
 
 document.addEventListener('click', (e) => {
+  const swap = e.target.closest('[data-use-script]');
+  if (swap) {
+    e.stopPropagation();
+    useScript(Number(swap.dataset.useScript), swap.dataset.to, swap);
+    return;
+  }
   const button = e.target.closest('[data-gen]');
   if (!button) return;
   e.stopPropagation();

@@ -194,6 +194,12 @@ const EN = {
   'Åbn mappen med de lavede scripts': 'Open the folder with the made scripts',
   'Lav script': 'Make script',
   'Laver script…': 'Making script…',
+  'Bruger auto-scriptet. Klik for at bruge originalen': 'Using the auto script. Click to use the original',
+  'Bruger originalen. Klik for at bruge auto-scriptet': 'Using the original. Click to use the auto script',
+  'original': 'original',
+  'Nyt script': 'New script',
+  'Lav et nyt script ud fra musikkens beat. Originalen bliver ikke rørt, og du kan skifte tilbage':
+    "Make a new script from the music's beat. The original is not touched, and you can switch back",
   'Lav et script ud fra musikkens beat (tager ca. 10–60 sek)': "Make a script from the music's beat (takes about 10–60 s)",
   'Scriptet er lavet automatisk ud fra musikken': 'The script was made automatically from the music',
 

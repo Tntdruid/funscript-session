@@ -381,6 +381,14 @@ class Handler(SimpleHTTPRequestHandler):
             threading.Thread(target=LIBRARY.generate_script, args=(int(m.group(1)),), daemon=True).start()
             return self.send_json({"started": True})
 
+        m = re.fullmatch(r"/api/videos/(\d+)/script", path)
+        if m:  # original or auto script for a PMV that has both
+            try:
+                video = LIBRARY.use_auto_script(int(m.group(1)), data.get("use") == "auto")
+            except ValueError as exc:
+                return self.send_json({"error": str(exc)}, 400)
+            return self.send_json({"video": video})
+
         m = re.fullmatch(r"/api/videos/(\d+)/rating", path)
         if m:
             try:

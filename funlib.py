@@ -422,14 +422,14 @@ OLD_GENERATED_DIR = REMUX_DIR.parent / "generated"  # before: hidden in AppData 
 
 def generated_dir():
     """Scripts the app made itself (beat scripts for PMVs) - in the app folder, never next to
-    the videos. Same folder layout as the library, so X:\PMV\a.mp4 -> X\PMV\a.funscript."""
+    the videos. Same folder layout as the library, so X:/PMV/a.mp4 -> X/PMV/a.funscript."""
     GENERATED_DIR.mkdir(parents=True, exist_ok=True)
     return Path(os.path.realpath(GENERATED_DIR))
 
 
 def generated_script_path(video_path):
     p = Path(video_path)
-    parts = [part.replace(":", "").strip("\/") for part in p.parent.parts]
+    parts = [part.replace(":", "").strip("\\/") for part in p.parent.parts]
     return generated_dir().joinpath(*[x for x in parts if x], p.stem + ".funscript")
 
 
@@ -665,7 +665,8 @@ class Library:
         for column, kind in (("container", "TEXT"), ("rating", "INTEGER DEFAULT 0"),
                              ("vib_path", "TEXT"), ("vib2_path", "TEXT"), ("meta", "TEXT"),
                              ("issues", "TEXT"), ("audio_db", "REAL"),
-                             ("amps", "TEXT"), ("rates", "TEXT")):
+                             ("amps", "TEXT"), ("rates", "TEXT"),
+                             ("orig_path", "TEXT"), ("use_auto", "INTEGER DEFAULT 0")):
             if column not in columns:  # added after the first release
                 self.conn.execute(f"ALTER TABLE videos ADD COLUMN {column} {kind}")
         if "vib" not in {r["name"] for r in self.conn.execute("PRAGMA table_info(sessions)")}:
@@ -727,26 +728,29 @@ class Library:
     def _scan_one(self, path):
         stat = path.stat()
         siblings = list(path.parent.iterdir())
-        script = find_script(path, siblings)
-        if script is None and generated_script_path(path).is_file():
-            script = generated_script_path(path)
+        with self.lock:
+            row = self.conn.execute("SELECT * FROM videos WHERE path=?", (str(path),)).fetchone()
+        original = find_script(path, siblings)
+        auto = generated_script_path(path)
+        auto = auto if auto.is_file() else None
+        # The original is used unless the user picked the auto script (PMVs can have both).
+        script = auto if auto and (original is None or (row and row["use_auto"])) else original
         script_mtime = script.stat().st_mtime if script else None
+        orig_path = str(original) if original else None
         vib, vib2 = find_vib_scripts(path, siblings)
         vib_paths = (str(vib) if vib else None, str(vib2) if vib2 else None)
         nfo = find_nfo(path, siblings)
         meta = json.dumps(parse_nfo(nfo) if nfo else {}, ensure_ascii=False)
-        with self.lock:
-            row = self.conn.execute("SELECT * FROM videos WHERE path=?", (str(path),)).fetchone()
         video_unchanged = bool(row and row["video_mtime"] == stat.st_mtime and row["container"])
         if (video_unchanged and row["size"] == stat.st_size
                 and row["script_path"] == (str(script) if script else None)
                 and row["script_mtime"] == script_mtime
                 and row["issues"] is not None and row["amps"] is not None
                 and row["rates"] is not None):  # rows from before the script check get one now
-            if (row["vib_path"], row["vib2_path"], row["meta"]) != (*vib_paths, meta):
+            if (row["vib_path"], row["vib2_path"], row["meta"], row["orig_path"]) != (*vib_paths, meta, orig_path):
                 with self.lock, self.conn:
-                    self.conn.execute("UPDATE videos SET vib_path=?, vib2_path=?, meta=? WHERE id=?",
-                                      (*vib_paths, meta, row["id"]))
+                    self.conn.execute("UPDATE videos SET vib_path=?, vib2_path=?, meta=?, orig_path=? WHERE id=?",
+                                      (*vib_paths, meta, orig_path, row["id"]))
                 return "updated"
             return "unchanged"
 
@@ -774,7 +778,7 @@ class Library:
             action_count=len(actions), avg_speed=average_speed(actions),
             speeds=json.dumps(speeds), amps=json.dumps(amps), rates=json.dumps(rates),
             scanned_at=time.time(),
-            vib_path=vib_paths[0], vib2_path=vib_paths[1], meta=meta,
+            vib_path=vib_paths[0], vib2_path=vib_paths[1], meta=meta, orig_path=orig_path,
             issues=json.dumps(check_script(actions, duration, speeds)),
         )
         if not video_unchanged:
@@ -801,6 +805,10 @@ class Library:
             v["taste"] = round(taste.get(v["id"], {}).get("score", 0.0), 2)
             v["beat"] = is_beat_video(v)
             v["canGenerate"] = (not v["hasScript"] and v["beat"] and v["playable"] and generate_ok)
+            # PMVs with an original script can get an auto script too, and switch between them
+            v["hasAuto"] = v["autoScript"] or (v["beat"] and generated_script_path(v["path"]).is_file())
+            v["canMakeAuto"] = (v["beat"] and v["hasOriginal"] and not v["hasAuto"]
+                                and v["playable"] and generate_ok)
         # A top-level folder holding a single video is that video's own folder, not a category.
         sizes = {}
         for v in videos:
@@ -846,6 +854,7 @@ class Library:
             **Library._meta_fields(row["meta"], row["name"]),
             "issues": json.loads(row["issues"] or "[]"),
             "autoScript": bool(row["script_path"]) and _is_generated(row["script_path"]),
+            "hasOriginal": bool(row["orig_path"]) or (bool(row["script_path"]) and not _is_generated(row["script_path"])),
             "loudness": row["audio_db"] if row["audio_db"] is not None and row["audio_db"] > NO_AUDIO else None,
         }
 
@@ -964,6 +973,16 @@ class Library:
         target.write_text(json.dumps(script), encoding="utf-8")
         self._scan_one(Path(video["path"]))  # picks the new script up and analyses it
 
+    def use_auto_script(self, video_id, use_auto):
+        """Pick the auto script or the original for a PMV that has both."""
+        video = self.video(video_id)
+        if not video:
+            raise ValueError("Ukendt video")
+        with self.lock, self.conn:
+            self.conn.execute("UPDATE videos SET use_auto=? WHERE id=?", (1 if use_auto else 0, video_id))
+        self._scan_one(Path(video["path"]))
+        return self.video(video_id)
+
     def generate_script(self, video_id):
         """Make a beat script for a video without one (runs in a background thread)."""
         video = self.video(video_id)
@@ -972,6 +991,8 @@ class Library:
         try:
             if not video:
                 raise RuntimeError("Ukendt video")
+            with self.lock, self.conn:
+                self.conn.execute("UPDATE videos SET use_auto=1 WHERE id=?", (video_id,))
             self._generate_one(video)
             self.generate_state["done"] = 1
         except Exception as exc:  # reported to the browser

@@ -41,6 +41,8 @@ kan kopieres over til videoen hvis man vil bruge dem i andre players. De markere
 Bibliotek laver "🎵 Lav scripts til alle PMV'er (N)" scripts til dem alle i baggrunden (med
 fremskridt og Stop), og 📂 åbner mappen. Testet mod rigtige PMV-scripts: 71–99 % af de automatiske
 slag lander på et rigtigt slag. Kræver `pip install librosa`; uden den vises knapperne ikke.
+PMV'er der allerede har et script, får knappen "🎵 Nyt script": appen laver et auto-script ved siden
+af (originalen bliver aldrig rørt) og bruger det. Knappen "auto ⇄ / original ⇄" skifter mellem de to.
 3. Klippene lægges efter hinanden og der samles ét funscript for hele sessionen, som gemmes
    i databasen og kan downloades som `.funscript`.
 4. Afspilleren skifter sømløst mellem klip (næste klip forudindlæses) og styrer en enhed via
