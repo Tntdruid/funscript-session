@@ -154,6 +154,11 @@ ekstrem hastighed eller meget stilstand.
 **Forhåndsvisning:** Hold musen over et kort i gitteret – videoen spiller lydløst og springer
 gennem fire steder; en hvid markør på hastighedskurven viser hvor.
 
+**Afspil på tv (Samsung m.fl.):** Tryk Win+K på PC'en og vælg tv'et (Skærmspejling), og brug ⛶
+fuldskærm. Slå "📺 Spejler til tv" til under Justering: billedet kommer lidt senere frem på tv'et, så
+Handy og vibratorer venter tilsvarende (start −250 ms, kan stilles fra −1500 til +500 ms). Tv og PC
+husker hver sin forsinkelse.
+
 **Rediger metadata:** ✎ på et billede i det store overblik åbner en editor til titel, skuespillere,
 genrer, studie og år. Rettelserne gemmes i appens database og overlever en ny scanning; .nfo-filerne
 bliver aldrig ændret. "Nulstil til .nfo" fjerner rettelserne igen.

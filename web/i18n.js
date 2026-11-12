@@ -197,6 +197,11 @@ const EN = {
   'Lav alle auto-scripts igen med den nyeste version? Det tager lidt tid. Originaler bliver ikke rørt.':
     'Make all auto scripts again with the newest version? It takes a while. Originals are not touched.',
   'Lav vib': 'Make vib',
+  '📺 Spejler til tv': '📺 Mirroring to TV',
+  "Tryk Win+K på PC'en og vælg dit Samsung TV. Billedet kommer lidt senere frem på tv'et, så Handy venter tilsvarende. Er Handy foran billedet, så træk mod minus.":
+    'Press Win+K on the PC and pick your Samsung TV. The picture shows up a little later on the TV, so the Handy waits as much. If the Handy is ahead of the picture, drag towards minus.',
+  '{n} ms (venter på billedet)': '{n} ms (waits for the picture)',
+  '{n} ms (før billedet)': '{n} ms (ahead of the picture)',
   'Alle skuespillere': 'All actors',
   'Skuespiller': 'Actor',
   'Rediger metadata': 'Edit metadata',

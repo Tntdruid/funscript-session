@@ -2341,8 +2341,29 @@ ui.timelineCanvas.addEventListener('click', (e) => {
 
 ui.connectBtn.addEventListener('click', toggleDevice);
 ui.handyConnectBtn.addEventListener('click', toggleHandy);
-ui.offsetSlider.addEventListener('input', () => { ui.offsetLabel.textContent = `${ui.offsetSlider.value} ms`; });
-ui.offsetSlider.addEventListener('change', handySync);
+// Delay between picture and devices. Mirroring to a TV (Win+K) shows the picture later, so the
+// TV mode has its own saved delay (negative = devices wait for the picture).
+const TV_DEFAULT_OFFSET = -250;
+function offsetKey() { return $('tvMode').checked ? 'offsetTv' : 'offsetPc'; }
+function showOffset() {
+  const ms = Number(ui.offsetSlider.value);
+  ui.offsetLabel.textContent = ms < 0 ? t('{n} ms (venter på billedet)', { n: ms })
+    : ms > 0 ? t('{n} ms (før billedet)', { n: `+${ms}` }) : '0 ms';
+  $('tvHint').classList.toggle('hidden', !$('tvMode').checked);
+}
+function loadOffset() {
+  ui.offsetSlider.value = loadJson(offsetKey(), $('tvMode').checked ? TV_DEFAULT_OFFSET : 0);
+  showOffset();
+}
+$('tvMode').checked = loadJson('tvMode', false);
+loadOffset();
+$('tvMode').addEventListener('change', () => {
+  saveJson('tvMode', $('tvMode').checked);
+  loadOffset();
+  handySync();
+});
+ui.offsetSlider.addEventListener('input', showOffset);
+ui.offsetSlider.addEventListener('change', () => { saveJson(offsetKey(), Number(ui.offsetSlider.value)); handySync(); });
 [ui.rangeMin, ui.rangeMax].forEach((el) => el.addEventListener('change', () => {
   Handy.setRange(Number(ui.rangeMin.value), Number(ui.rangeMax.value)).catch(() => {});
 }));
