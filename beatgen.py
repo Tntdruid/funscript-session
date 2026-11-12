@@ -13,6 +13,8 @@ HOP = 512
 SEGMENT_S = 30
 LEAD_IN_S = 3
 MIN_STROKE_MS = 300  # faster than 200 strokes/min: one stroke per two beats
+QUIET_LEVEL = 0.08   # below this (share of the loud parts) the music counts as silent
+MAX_GAP_BEATS = 1.7  # a gap longer than this many beats gets the missing beats filled in
 
 _FFMPEG = shutil.which("ffmpeg")
 
@@ -47,12 +49,14 @@ def track_beats(y):
     seg, lead = int(SEGMENT_S * fps), int(LEAD_IN_S * fps)
     frames, tempo = [], 125.0
     for s in range(0, len(onset), seg):
+        # overlap on both sides and no trimming: librosa otherwise drops the beats at the end
+        # of each piece, which left holes of several seconds every 30 s
         lo = max(0, s - lead)
-        chunk = onset[lo:s + seg]
+        chunk = onset[lo:s + seg + lead]
         if len(chunk) < fps * 4 or not chunk.any():
             continue
         found_tempo, found = librosa.beat.beat_track(onset_envelope=chunk, sr=SR, hop_length=HOP,
-                                                     start_bpm=tempo, tightness=100)
+                                                     start_bpm=tempo, tightness=100, trim=False)
         tempo = float(np.atleast_1d(found_tempo)[0]) or tempo
         frames.extend(int(lo + f) for f in found if s <= lo + f < s + seg)
     frames = sorted(set(frames))
@@ -65,10 +69,33 @@ def track_beats(y):
             if f - kept[-1] >= median * 0.5:
                 kept.append(f)
         frames = kept
+        frames = _fill_gaps(frames, rms, np.percentile(rms, 95) or 1.0)
     loud = np.percentile(rms, 95) or 1.0
     times = librosa.frames_to_time(np.array(frames), sr=SR, hop_length=HOP) * 1000
     levels = [min(1.0, float(rms[min(f, len(rms) - 1)]) / loud) for f in frames]
     return list(times), levels
+
+
+def _fill_gaps(frames, rms, loud):
+    """Beats the tracker missed while the music plays on: fill them in at the local tempo."""
+    import numpy as np
+    if len(frames) < 4:
+        return frames
+    out = [frames[0]]
+    for i, f in enumerate(frames[1:], start=1):
+        prev = out[-1]
+        # local beat length from the beats just before and after the gap
+        near = np.diff(frames[max(0, i - 5):i]).tolist() + np.diff(frames[i:i + 5]).tolist()
+        period = float(np.median(near)) if near else f - prev
+        gap = f - prev
+        if period > 0 and gap > period * MAX_GAP_BEATS:
+            n = round(gap / period)
+            for k in range(1, n):
+                g = int(round(prev + gap * k / n))
+                if float(rms[min(g, len(rms) - 1)]) / loud >= QUIET_LEVEL:  # only where it isn't silent
+                    out.append(g)
+        out.append(f)
+    return out
 
 
 def strokes_from_beats(times, levels):
@@ -81,7 +108,7 @@ def strokes_from_beats(times, levels):
             step += 1
         t0, t1 = times[i], times[i + step]
         level = levels[i]
-        if level < 0.15:  # near silence: no motion
+        if level < QUIET_LEVEL:  # near silence: no motion
             i += step
             continue
         amp = 35 + 65 * min(1.0, level / 0.8)

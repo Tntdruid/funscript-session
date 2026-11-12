@@ -1000,9 +1000,11 @@ class Library:
         finally:
             self.generate_state["running"] = False
 
-    def generate_all(self):
-        """Beat scripts for every PMV that has none, one after another; can be stopped."""
-        todo = [v for v in self.videos() if v.get("canGenerate")]
+    def generate_all(self, redo=False):
+        """Beat scripts for every PMV that has none (or, with redo, make every auto script again
+        with the current version), one after another; can be stopped."""
+        todo = [v for v in self.videos()
+                if ((v.get("hasAuto") and v["playable"]) if redo else v.get("canGenerate"))]
         state = {"running": True, "videoId": None, "error": "", "done": 0, "total": len(todo),
                  "current": "", "failed": [], "stop": False, "all": True}
         self.generate_state = state

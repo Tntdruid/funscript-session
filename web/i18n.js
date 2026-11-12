@@ -191,6 +191,11 @@ const EN = {
   'Gemmes i mappen "Genererede scripts" i app-mappen, ikke ved videoerne. Tager ca. 1 sek per minut video.':
     'Saved in the "Genererede scripts" folder in the app folder, not next to the videos. Takes about 1 s per minute of video.',
   "Alle PMV'er har et script ({n} lavet automatisk)": 'All PMVs have a script ({n} made automatically)',
+  'Lav auto-scripts forfra ({n})': 'Remake auto scripts ({n})',
+  'Laver alle auto-scripts igen med den nyeste version. Originaler bliver ikke rørt':
+    'Makes all auto scripts again with the newest version. Originals are not touched',
+  'Lav alle auto-scripts igen med den nyeste version? Det tager lidt tid. Originaler bliver ikke rørt.':
+    'Make all auto scripts again with the newest version? It takes a while. Originals are not touched.',
   'Åbn mappen med de lavede scripts': 'Open the folder with the made scripts',
   'Lav script': 'Make script',
   'Laver script…': 'Making script…',

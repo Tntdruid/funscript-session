@@ -354,7 +354,10 @@ function renderGenAll(status = null) {
   const waiting = state.library.filter((v) => v.canGenerate).length;
   const running = status?.running && status?.all;
   const made = state.library.filter((v) => v.autoScript).length;
-  $('genAllBox').classList.toggle('hidden', !waiting && !running && !status?.all && !made);
+  const remake = state.library.filter((v) => v.hasAuto && v.playable).length;
+  $('genRedoBtn').classList.toggle('hidden', running || !remake);
+  $('genRedoBtn').textContent = `↻ ${t('Lav auto-scripts forfra ({n})', { n: remake })}`;
+  $('genAllBox').classList.toggle('hidden', !waiting && !running && !status?.all && !made && !remake);
   const button = $('genAllBtn');
   button.textContent = running ? `⏹ ${t('Stop')}` : `🎵 ${t("Lav scripts til alle PMV'er ({n})", { n: waiting })}`;
   button.disabled = !running && !waiting;
@@ -393,14 +396,14 @@ async function pollGenAll() {
   }
 }
 
-async function toggleGenAll() {
+async function toggleGenAll(redo = false) {
   const status = await api('/api/generate/status');
   if (status.running && status.all) {
     await api('/api/generate/stop', { method: 'POST', body: {} });
     return;
   }
   try {
-    await api('/api/generate/all', { method: 'POST', body: {} });
+    await api('/api/generate/all', { method: 'POST', body: { redo } });
     pollGenAll();
   } catch (err) {
     $('genAllStatus').textContent = err.message;
@@ -2077,7 +2080,10 @@ function checkHandyDrift(threshold = 250, minGap = 2000) {
 // ------------------------------------------------------------------ events
 
 ui.scanBtn.addEventListener('click', scanLibrary);
-$('genAllBtn').addEventListener('click', toggleGenAll);
+$('genAllBtn').addEventListener('click', () => toggleGenAll());
+$('genRedoBtn').addEventListener('click', () => {
+  if (confirm(t('Lav alle auto-scripts igen med den nyeste version? Det tager lidt tid. Originaler bliver ikke rørt.'))) toggleGenAll(true);
+});
 $('genOpenBtn').addEventListener('click', () => api('/api/generate/open', { method: 'POST', body: {} }).catch((e) => alert(e.message)));
 resumeUi.yes.addEventListener('click', resumeSession);
 resumeUi.no.addEventListener('click', dismissResume);

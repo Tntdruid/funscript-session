@@ -364,7 +364,7 @@ class Handler(SimpleHTTPRequestHandler):
             if LIBRARY.generate_state.get("running"):
                 return self.send_json({"error": "Der laves allerede et script"}, 400)
             LIBRARY.generate_state = {"running": True, "done": 0, "total": 0, "failed": [], "error": ""}
-            threading.Thread(target=LIBRARY.generate_all, daemon=True).start()
+            threading.Thread(target=LIBRARY.generate_all, args=(bool(data.get("redo")),), daemon=True).start()
             return self.send_json({"started": True})
         if path == "/api/generate/open":  # show the folder in Explorer
             os.startfile(str(generated_dir()))
