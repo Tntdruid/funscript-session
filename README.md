@@ -45,6 +45,11 @@ PMV'er der allerede har et script, får knappen "🎵 Nyt script": appen laver e
 af (originalen bliver aldrig rørt) og bruger det. Knappen "auto ⇄ / original ⇄" skifter mellem de to.
 "↻ Lav auto-scripts forfra" laver alle auto-scripts igen med den nyeste version af beat-genkendelsen.
 Manglende beats midt i musikken bliver fyldt ud, så der ikke kommer huller i scriptet.
+
+**Auto vib-scripts:** Samtidig laves `.vib` og `.vib2` til vibratorer (fx Lovense Gush 2 og Edge):
+`.vib` pulserer på beatet og bliver stærkere når musikken er høj, `.vib2` (motor 2) følger bassen
+roligt. De bruges kun når videoen ikke har sine egne vib-scripts. PMV'er der har et script men ingen
+vib, får knappen "📳 Lav vib", og "Lav scripts til alle PMV'er" laver dem også.
 3. Klippene lægges efter hinanden og der samles ét funscript for hele sessionen, som gemmes
    i databasen og kan downloades som `.funscript`.
 4. Afspilleren skifter sømløst mellem klip (næste klip forudindlæses) og styrer en enhed via

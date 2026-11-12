@@ -342,3 +342,4 @@ details.more .toggle { margin: 4px 0 10px; }
 .voice-box .hint { cursor: help; }
 .link-btn { margin-top: 6px; padding: 0; background: none; border: none; font-size: 11px; color: var(--muted); text-decoration: underline; cursor: pointer; }
 .link-btn:hover { color: var(--text); }
+.vib-badge.auto { background: #2a3355; color: #a7c4ff; }

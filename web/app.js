@@ -241,7 +241,7 @@ function makeLibraryRow(v) {
     <img class="thumb" loading="lazy" alt="" src="/thumb/${v.id}?h=420" />
     <div class="info">
       <span class="name" title="${escapeHtml(v.path)}">${escapeHtml(v.name)}</span>
-      <span class="meta"><span>${fmtTime(v.durationMs)}</span>${v.canGenerate ? genButton(v) : `<span>${reason}</span>`}${autoBadge(v)}${issueBadge(v)}${v.hasVib ? `<span class="vib-badge" title="${t('Har {x}-script', { x: v.hasVib2 ? '.vib + .vib2' : '.vib' })}">vib${v.hasVib2 ? '×2' : ''}</span>` : ''}<canvas></canvas></span>
+      <span class="meta"><span>${fmtTime(v.durationMs)}</span>${v.canGenerate ? genButton(v) : `<span>${reason}</span>`}${autoBadge(v)}${issueBadge(v)}${vibBadge(v)}<canvas></canvas></span>
     </div>
     <div class="rate">
       <button class="fav ${v.rating > 0 ? 'on' : ''}" title="${t('Favorit – foretrækkes i sessioner')}">${v.rating > 0 ? '★' : '☆'}</button>
@@ -283,6 +283,13 @@ function genButton(v) {
     : '';
 }
 
+function vibBadge(v) {
+  if (!v.hasVib) return '';
+  const title = v.autoVib ? t('Vib-scripts lavet automatisk ud fra musikken')
+    : t('Har {x}-script', { x: v.hasVib2 ? '.vib + .vib2' : '.vib' });
+  return `<span class="vib-badge${v.autoVib ? ' auto' : ''}" title="${title}">vib${v.hasVib2 ? '×2' : ''}${v.autoVib ? ' auto' : ''}</span>`;
+}
+
 /** "auto" badge, a switch between original and auto script, or a button to make an auto script. */
 function autoBadge(v) {
   if (v.hasOriginal && v.hasAuto) {
@@ -290,6 +297,9 @@ function autoBadge(v) {
     const title = v.autoScript ? t('Bruger auto-scriptet. Klik for at bruge originalen')
       : t('Bruger originalen. Klik for at bruge auto-scriptet');
     return `<button class="script-switch${v.autoScript ? ' on' : ''}" data-use-script="${v.id}" data-to="${to}" title="${title}">${v.autoScript ? 'auto' : t('original')} ⇄</button>`;
+  }
+  if (v.canMakeVib && !v.canMakeAuto && !v.canGenerate) {
+    return `<button class="gen-btn" data-gen="${v.id}" title="${t('Lav vib-scripts til vibratorer (fx Lovense Gush/Edge) ud fra musikken')}">📳 ${t('Lav vib')}</button>`;
   }
   if (v.canMakeAuto) {
     return `<button class="gen-btn" data-gen="${v.id}" title="${t('Lav et nyt script ud fra musikkens beat. Originalen bliver ikke rørt, og du kan skifte tilbage')}">🎵 ${t('Nyt script')}</button>`;
@@ -351,7 +361,7 @@ document.addEventListener('click', (e) => {
 let genAllPolling = false;
 
 function renderGenAll(status = null) {
-  const waiting = state.library.filter((v) => v.canGenerate).length;
+  const waiting = state.library.filter((v) => v.canGenerate || v.canMakeVib).length;
   const running = status?.running && status?.all;
   const made = state.library.filter((v) => v.autoScript).length;
   const remake = state.library.filter((v) => v.hasAuto && v.playable).length;
@@ -373,7 +383,7 @@ function renderGenAll(status = null) {
   } else if (!waiting) {
     $('genAllStatus').textContent = t("Alle PMV'er har et script ({n} lavet automatisk)", { n: made });
   } else {
-    $('genAllStatus').textContent = t('Gemmes i mappen "Genererede scripts" i app-mappen, ikke ved videoerne. Tager ca. 1 sek per minut video.');
+    $('genAllStatus').textContent = t('Laver script og vib-scripts. Gemmes i mappen "Genererede scripts" i app-mappen, ikke ved videoerne. Tager ca. 1 sek per minut video.');
   }
   $('genAllBar').style.width = total ? `${(done / total) * 100}%` : '0';
 }
@@ -517,7 +527,7 @@ function makeGridCard(v) {
     <div class="cinfo">
       <div class="cname">${escapeHtml(v.title)}</div>
       <div class="cpeople">${escapeHtml([v.actors.slice(0, 2).join(', '), v.year].filter(Boolean).join(' · '))}</div>
-      <div class="cmeta">${v.canGenerate ? genButton(v) : `<span>${info}</span>`}${autoBadge(v)}${v.taste > 0.3 ? `<span class="liked" title="${t('Lært: du ser den ofte færdig')}">♥</span>` : ''}${issueBadge(v)}${v.hasVib ? `<span class="vib-badge">vib${v.hasVib2 ? '×2' : ''}</span>` : ''}<span>${escapeHtml(t(v.category))}</span></div>
+      <div class="cmeta">${v.canGenerate ? genButton(v) : `<span>${info}</span>`}${autoBadge(v)}${v.taste > 0.3 ? `<span class="liked" title="${t('Lært: du ser den ofte færdig')}">♥</span>` : ''}${issueBadge(v)}${vibBadge(v)}<span>${escapeHtml(t(v.category))}</span></div>
       <div class="spark-wrap"><canvas data-id="${v.id}"></canvas><span class="spark-pos" hidden></span></div>
     </div>`;
   card.querySelector('img').addEventListener('error', (e) => e.target.classList.add('missing'));

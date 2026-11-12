@@ -76,6 +76,66 @@ def track_beats(y):
     return list(times), levels
 
 
+def _smooth(values, frames):
+    import numpy as np
+    if frames <= 1:
+        return values
+    kernel = np.ones(frames) / frames
+    return np.convolve(values, kernel, mode="same")
+
+
+def vib_from_music(y, times):
+    """Two vibration tracks (0..100) from the music, like hand-made .vib/.vib2 scripts:
+    vib pulses on the beat with the loudness, vib2 (second motor) follows the bass slowly."""
+    import numpy as np
+    import librosa
+    fps = SR / HOP
+    rms = librosa.feature.rms(y=y, hop_length=HOP)[0]
+    energy = _smooth(rms / (np.percentile(rms, 95) or 1.0), int(fps * 1.5))
+    spec = np.abs(librosa.stft(y, n_fft=2048, hop_length=HOP))
+    freqs = librosa.fft_frequencies(sr=SR, n_fft=2048)
+    bass = spec[freqs < 150].sum(axis=0)
+    bass = _smooth(bass / (np.percentile(bass, 95) or 1.0), int(fps * 1.0))
+
+    def at(curve, ms):
+        return float(curve[min(int(ms / 1000 * fps), len(curve) - 1)])
+
+    def level(x):
+        return int(min(100, max(0, round(x * 100 / 5) * 5)))
+
+    vib = [{"at": 0, "pos": 0}]
+    for t0, t1 in zip(times, times[1:]):
+        e = min(1.0, at(energy, t0))
+        if e < QUIET_LEVEL:  # silence: off
+            if vib[-1]["pos"] != 0:
+                vib.append({"at": int(t0), "pos": 0})
+            continue
+        peak = level(0.25 + 0.75 * e)            # strong on the beat
+        rest = level((0.25 + 0.75 * e) * 0.55)   # softer between beats: a throb
+        vib.append({"at": int(t0), "pos": peak})
+        vib.append({"at": int(t0 + min(180, (t1 - t0) * 0.45)), "pos": rest})
+    end = int(len(y) / SR * 1000)
+    vib.append({"at": end, "pos": 0})
+
+    vib2, last = [{"at": 0, "pos": 0}], 0
+    for ms in range(0, end, 500):
+        pos = level(min(1.0, at(bass, ms))) if at(energy, ms) >= QUIET_LEVEL else 0
+        if pos != last:  # hold a level until it changes (like hand-made scripts)
+            vib2.append({"at": ms, "pos": pos})
+            last = pos
+    vib2.append({"at": end, "pos": 0})
+    return _clean(vib), _clean(vib2)
+
+
+def _clean(actions):
+    out = []
+    for a in sorted(actions, key=lambda a: a["at"]):
+        if out and a["at"] <= out[-1]["at"]:
+            continue
+        out.append(a)
+    return out
+
+
 def _fill_gaps(frames, rms, loud):
     """Beats the tracker missed while the music plays on: fill them in at the local tempo."""
     import numpy as np
@@ -125,8 +185,13 @@ def strokes_from_beats(times, levels):
     return deduped
 
 
-def generate(path):
-    """Funscript dict for the video at `path`, or raises RuntimeError."""
+def _funscript(actions, title, notes):
+    return {"version": "1.0", "inverted": False, "range": 100,
+            "metadata": {"title": title, "notes": notes}, "actions": actions}
+
+
+def generate_all(path):
+    """{"stroke", "vib", "vib2"} funscript dicts for the video at `path`, or raises RuntimeError."""
     if not available():
         raise RuntimeError("librosa er ikke installeret")
     y = _decode(path)
@@ -138,8 +203,13 @@ def generate(path):
         raise RuntimeError("Fandt ikke nok beats i musikken")
     gaps = sorted(b - a for a, b in zip(times, times[1:]))
     bpm = round(60000 / gaps[len(gaps) // 2]) if gaps else 0
-    return {
-        "version": "1.0", "inverted": False, "range": 100,
-        "metadata": {"title": "Auto beat script", "notes": f"Lavet af Funscript Session ud fra musikken (~{bpm} BPM)"},
-        "actions": actions,
-    }
+    notes = f"Lavet af Funscript Session ud fra musikken (~{bpm} BPM)"
+    vib, vib2 = vib_from_music(y, times)
+    return {"stroke": _funscript(actions, "Auto beat script", notes),
+            "vib": _funscript(vib, "Auto vib script", notes + ", vibration paa beatet"),
+            "vib2": _funscript(vib2, "Auto vib2 script", notes + ", vibration efter bassen")}
+
+
+def generate(path):
+    """Stroke funscript dict for the video at `path`, or raises RuntimeError."""
+    return generate_all(path)["stroke"]

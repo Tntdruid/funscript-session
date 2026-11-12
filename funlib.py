@@ -433,6 +433,11 @@ def generated_script_path(video_path):
     return generated_dir().joinpath(*[x for x in parts if x], p.stem + ".funscript")
 
 
+def generated_vib_path(video_path, variant="vib"):
+    """Auto vibration script (variant "vib" or "vib2") next to the auto stroke script."""
+    return generated_script_path(video_path).with_name(f"{Path(video_path).stem}.{variant}.funscript")
+
+
 def _old_generated_path(video_path):
     import hashlib
     return Path(os.path.realpath(OLD_GENERATED_DIR)) / (
@@ -738,6 +743,9 @@ class Library:
         script_mtime = script.stat().st_mtime if script else None
         orig_path = str(original) if original else None
         vib, vib2 = find_vib_scripts(path, siblings)
+        if vib is None and generated_vib_path(path).is_file():  # no own .vib: use the auto ones
+            vib = generated_vib_path(path)
+            vib2 = generated_vib_path(path, "vib2") if generated_vib_path(path, "vib2").is_file() else None
         vib_paths = (str(vib) if vib else None, str(vib2) if vib2 else None)
         nfo = find_nfo(path, siblings)
         meta = json.dumps(parse_nfo(nfo) if nfo else {}, ensure_ascii=False)
@@ -809,6 +817,8 @@ class Library:
             v["hasAuto"] = v["autoScript"] or (v["beat"] and generated_script_path(v["path"]).is_file())
             v["canMakeAuto"] = (v["beat"] and v["hasOriginal"] and not v["hasAuto"]
                                 and v["playable"] and generate_ok)
+            # vibration scripts from the music for PMVs that have no .vib
+            v["canMakeVib"] = v["beat"] and not v["hasVib"] and v["playable"] and generate_ok
         # A top-level folder holding a single video is that video's own folder, not a category.
         sizes = {}
         for v in videos:
@@ -851,6 +861,7 @@ class Library:
             "playCount": row["play_count"] or 0, "lastPlayed": row["last_played"],
             "rating": row["rating"] or 0,
             "hasVib": bool(row["vib_path"]), "hasVib2": bool(row["vib2_path"]),
+            "autoVib": bool(row["vib_path"]) and _is_generated(row["vib_path"]),
             **Library._meta_fields(row["meta"], row["name"]),
             "issues": json.loads(row["issues"] or "[]"),
             "autoScript": bool(row["script_path"]) and _is_generated(row["script_path"]),
@@ -967,10 +978,12 @@ class Library:
     def _generate_one(self, video):
         """Beat script for one video, written to the app's own folder and scanned in."""
         import beatgen
-        script = beatgen.generate(video["path"])
+        scripts = beatgen.generate_all(video["path"])
         target = generated_script_path(video["path"])
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(json.dumps(script), encoding="utf-8")
+        target.write_text(json.dumps(scripts["stroke"]), encoding="utf-8")
+        for variant in ("vib", "vib2"):  # used only when the video has no .vib of its own
+            generated_vib_path(video["path"], variant).write_text(json.dumps(scripts[variant]), encoding="utf-8")
         self._scan_one(Path(video["path"]))  # picks the new script up and analyses it
 
     def use_auto_script(self, video_id, use_auto):
@@ -991,8 +1004,9 @@ class Library:
         try:
             if not video:
                 raise RuntimeError("Ukendt video")
-            with self.lock, self.conn:
-                self.conn.execute("UPDATE videos SET use_auto=1 WHERE id=?", (video_id,))
+            if not generated_script_path(video["path"]).is_file():  # a new auto script is used at once
+                with self.lock, self.conn:
+                    self.conn.execute("UPDATE videos SET use_auto=1 WHERE id=?", (video_id,))
             self._generate_one(video)
             self.generate_state["done"] = 1
         except Exception as exc:  # reported to the browser
@@ -1004,7 +1018,8 @@ class Library:
         """Beat scripts for every PMV that has none (or, with redo, make every auto script again
         with the current version), one after another; can be stopped."""
         todo = [v for v in self.videos()
-                if ((v.get("hasAuto") and v["playable"]) if redo else v.get("canGenerate"))]
+                if ((v.get("hasAuto") and v["playable"]) if redo
+                    else (v.get("canGenerate") or v.get("canMakeVib")))]
         state = {"running": True, "videoId": None, "error": "", "done": 0, "total": len(todo),
                  "current": "", "failed": [], "stop": False, "all": True}
         self.generate_state = state
