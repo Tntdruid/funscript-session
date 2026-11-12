@@ -45,6 +45,7 @@ MESSAGES_EN = {
     "Der laves allerede et script": "A script is already being made",
     "librosa er ikke installeret": "librosa is not installed",
     "Videoen har ingen brugbar lyd": "The video has no usable sound",
+    "Videoen har ingen script at lave vib ud fra": "The video has no script to make vib from",
     "Fandt ikke nok beats i musikken": "Found too few beats in the music",
     "Ukendt video": "Unknown video",
 }
@@ -364,7 +365,8 @@ class Handler(SimpleHTTPRequestHandler):
             if LIBRARY.generate_state.get("running"):
                 return self.send_json({"error": "Der laves allerede et script"}, 400)
             LIBRARY.generate_state = {"running": True, "done": 0, "total": 0, "failed": [], "error": ""}
-            threading.Thread(target=LIBRARY.generate_all, args=(bool(data.get("redo")),), daemon=True).start()
+            mode = "redo" if data.get("redo") else data.get("mode") if data.get("mode") in ("pmv", "vib") else "pmv"
+            threading.Thread(target=LIBRARY.generate_all, args=(mode,), daemon=True).start()
             return self.send_json({"started": True})
         if path == "/api/generate/open":  # show the folder in Explorer
             os.startfile(str(generated_dir()))

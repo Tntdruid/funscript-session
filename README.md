@@ -50,6 +50,10 @@ Manglende beats midt i musikken bliver fyldt ud, så der ikke kommer huller i sc
 `.vib` pulserer på beatet og bliver stærkere når musikken er høj, `.vib2` (motor 2) følger bassen
 roligt. De bruges kun når videoen ikke har sine egne vib-scripts. PMV'er der har et script men ingen
 vib, får knappen "📳 Lav vib", og "Lav scripts til alle PMV'er" laver dem også.
+Andre videoer (ikke PMV) kan få vib-scripts ud fra deres stroke-script: én puls per slag, stærkere
+jo hurtigere slaget er, og hurtige slag samles til pulser på mindst 250 ms. `.vib2` følger tempoet
+roligt. Brug "📳 Lav vib" på en video eller "📳 Lav vib-scripts til alle andre videoer" (tager et par
+minutter for flere hundrede videoer, kræver ikke librosa).
 3. Klippene lægges efter hinanden og der samles ét funscript for hele sessionen, som gemmes
    i databasen og kan downloades som `.funscript`.
 4. Afspilleren skifter sømløst mellem klip (næste klip forudindlæses) og styrer en enhed via

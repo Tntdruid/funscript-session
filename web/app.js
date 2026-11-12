@@ -285,7 +285,7 @@ function genButton(v) {
 
 function vibBadge(v) {
   if (!v.hasVib) return '';
-  const title = v.autoVib ? t('Vib-scripts lavet automatisk ud fra musikken')
+  const title = v.autoVib ? t(v.beat ? 'Vib-scripts lavet automatisk ud fra musikken' : 'Vib-scripts lavet automatisk ud fra stroke-scriptet')
     : t('Har {x}-script', { x: v.hasVib2 ? '.vib + .vib2' : '.vib' });
   return `<span class="vib-badge${v.autoVib ? ' auto' : ''}" title="${title}">vib${v.hasVib2 ? '×2' : ''}${v.autoVib ? ' auto' : ''}</span>`;
 }
@@ -299,7 +299,9 @@ function autoBadge(v) {
     return `<button class="script-switch${v.autoScript ? ' on' : ''}" data-use-script="${v.id}" data-to="${to}" title="${title}">${v.autoScript ? 'auto' : t('original')} ⇄</button>`;
   }
   if (v.canMakeVib && !v.canMakeAuto && !v.canGenerate) {
-    return `<button class="gen-btn" data-gen="${v.id}" title="${t('Lav vib-scripts til vibratorer (fx Lovense Gush/Edge) ud fra musikken')}">📳 ${t('Lav vib')}</button>`;
+    const how = v.beat ? t('Lav vib-scripts til vibratorer (fx Lovense Gush/Edge) ud fra musikken')
+      : t('Lav vib-scripts til vibratorer (fx Lovense Gush/Edge) ud fra stroke-scriptet');
+    return `<button class="gen-btn" data-gen="${v.id}" title="${how}">📳 ${t('Lav vib')}</button>`;
   }
   if (v.canMakeAuto) {
     return `<button class="gen-btn" data-gen="${v.id}" title="${t('Lav et nyt script ud fra musikkens beat. Originalen bliver ikke rørt, og du kan skifte tilbage')}">🎵 ${t('Nyt script')}</button>`;
@@ -361,13 +363,16 @@ document.addEventListener('click', (e) => {
 let genAllPolling = false;
 
 function renderGenAll(status = null) {
-  const waiting = state.library.filter((v) => v.canGenerate || v.canMakeVib).length;
+  const waiting = state.library.filter((v) => v.beat && (v.canGenerate || v.canMakeVib)).length;
+  const vibWaiting = state.library.filter((v) => !v.beat && v.canMakeVib).length;
   const running = status?.running && status?.all;
   const made = state.library.filter((v) => v.autoScript).length;
-  const remake = state.library.filter((v) => v.hasAuto && v.playable).length;
+  const remake = state.library.filter((v) => (v.hasAuto || v.autoVib) && v.playable).length;
+  $('genVibBtn').classList.toggle('hidden', running || !vibWaiting);
+  $('genVibBtn').textContent = `📳 ${t('Lav vib-scripts til alle andre videoer ({n})', { n: vibWaiting })}`;
   $('genRedoBtn').classList.toggle('hidden', running || !remake);
   $('genRedoBtn').textContent = `↻ ${t('Lav auto-scripts forfra ({n})', { n: remake })}`;
-  $('genAllBox').classList.toggle('hidden', !waiting && !running && !status?.all && !made && !remake);
+  $('genAllBox').classList.toggle('hidden', !waiting && !running && !status?.all && !made && !remake && !vibWaiting);
   const button = $('genAllBtn');
   button.textContent = running ? `⏹ ${t('Stop')}` : `🎵 ${t("Lav scripts til alle PMV'er ({n})", { n: waiting })}`;
   button.disabled = !running && !waiting;
@@ -406,14 +411,14 @@ async function pollGenAll() {
   }
 }
 
-async function toggleGenAll(redo = false) {
+async function toggleGenAll(mode = 'pmv') {
   const status = await api('/api/generate/status');
   if (status.running && status.all) {
     await api('/api/generate/stop', { method: 'POST', body: {} });
     return;
   }
   try {
-    await api('/api/generate/all', { method: 'POST', body: { redo } });
+    await api('/api/generate/all', { method: 'POST', body: { mode, redo: mode === 'redo' } });
     pollGenAll();
   } catch (err) {
     $('genAllStatus').textContent = err.message;
@@ -2092,7 +2097,10 @@ function checkHandyDrift(threshold = 250, minGap = 2000) {
 ui.scanBtn.addEventListener('click', scanLibrary);
 $('genAllBtn').addEventListener('click', () => toggleGenAll());
 $('genRedoBtn').addEventListener('click', () => {
-  if (confirm(t('Lav alle auto-scripts igen med den nyeste version? Det tager lidt tid. Originaler bliver ikke rørt.'))) toggleGenAll(true);
+  if (confirm(t('Lav alle auto-scripts igen med den nyeste version? Det tager lidt tid. Originaler bliver ikke rørt.'))) toggleGenAll('redo');
+});
+$('genVibBtn').addEventListener('click', () => {
+  if (confirm(t('Lav vib-scripts ud fra stroke-scriptet til alle videoer uden vib (ikke PMV)? Det går hurtigt. Originaler bliver ikke rørt.'))) toggleGenAll('vib');
 });
 $('genOpenBtn').addEventListener('click', () => api('/api/generate/open', { method: 'POST', body: {} }).catch((e) => alert(e.message)));
 resumeUi.yes.addEventListener('click', resumeSession);

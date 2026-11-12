@@ -631,6 +631,73 @@ def parse_nfo(path):
     }
 
 
+def vib_from_strokes(actions, full_speed=350.0):
+    """Two vibration tracks (0..100) from a stroke script, like hand-made .vib/.vib2 scripts:
+    vib throbs once per stroke and is stronger the faster the stroke; vib2 (second motor)
+    follows the overall pace slowly. Pauses in the script are off."""
+    if len(actions) < 2:
+        return [], []
+
+    def level(x):
+        return int(min(100, max(0, round(x * 100 / 5) * 5)))
+
+    # turning points: one stroke = one move from a turn to the next. Small wiggles (< 8 units)
+    # in dense scripts don't count, so the vibration doesn't flicker.
+    turns, extreme, direction = [actions[0]], actions[0], 0
+    for at, pos in actions[1:]:
+        if direction >= 0 and pos >= extreme[1] or direction <= 0 and pos <= extreme[1]:
+            if direction == 0 and pos != extreme[1]:
+                direction = 1 if pos > extreme[1] else -1
+            extreme = (at, pos)
+        elif abs(pos - extreme[1]) >= 8:
+            turns.append(extreme)
+            direction, extreme = -direction, (at, pos)
+    turns.append(extreme)
+    if turns[-1] != actions[-1]:
+        turns.append(actions[-1])
+    vib = [(0, 0)]
+    i = 0
+    while i < len(turns) - 1:
+        # very quick strokes are pooled into one throb of at least 250 ms
+        j, moved = i + 1, abs(turns[i + 1][1] - turns[i][1])
+        while j < len(turns) - 1 and turns[j][0] - turns[i][0] < 250:
+            moved += abs(turns[j + 1][1] - turns[j][1])
+            j += 1
+        t0, t1 = turns[i][0], turns[j][0]
+        dt = t1 - t0
+        i = j
+        if dt <= 0:
+            continue
+        if moved == 0 or dt > 2500:  # standing still: off
+            if vib[-1][1] != 0:
+                vib.append((t0, 0))
+            continue
+        speed = min(1.0, moved / (dt / 1000.0) / full_speed)
+        vib.append((t0, level(0.25 + 0.75 * speed)))                       # throb at the start
+        vib.append((t0 + int(min(200, dt * 0.45)), level((0.25 + 0.75 * speed) * 0.55)))
+    end = actions[-1][0]
+    vib.append((end, 0))
+
+    pace = derive_vib(actions, window_ms=500, full_speed=full_speed)
+    vib2, last = [(0, 0)], 0
+    for i in range(len(pace)):
+        near = [p for _, p in pace[max(0, i - 2):i + 3]]  # ~2.5 s average
+        pos = level(sum(near) / len(near) / 100) if near else 0
+        if pos != last:
+            vib2.append((pace[i][0], pos))
+            last = pos
+    vib2.append((end, 0))
+
+    def clean(track):
+        out = []
+        for at, pos in sorted(track):
+            if out and at <= out[-1]["at"]:
+                continue
+            out.append({"at": int(at), "pos": int(pos)})
+        return out
+    return clean(vib), clean(vib2)
+
+
 def derive_vib(actions, window_ms=500, full_speed=350.0):
     """Vibration intensity (0-100) from how fast a stroke script moves. Used for clips
     whose video has no .vib script."""
@@ -818,7 +885,8 @@ class Library:
             v["canMakeAuto"] = (v["beat"] and v["hasOriginal"] and not v["hasAuto"]
                                 and v["playable"] and generate_ok)
             # vibration scripts from the music for PMVs that have no .vib
-            v["canMakeVib"] = v["beat"] and not v["hasVib"] and v["playable"] and generate_ok
+            v["canMakeVib"] = (not v["hasVib"] and v["playable"]
+                               and ((v["beat"] and generate_ok) or v["hasScript"]))
         # A top-level folder holding a single video is that video's own folder, not a category.
         sizes = {}
         for v in videos:
@@ -975,6 +1043,29 @@ class Library:
                     self.conn.execute("UPDATE videos SET script_path=? WHERE id=?", (str(new), row["id"]))
             self.conn.commit()
 
+    def _vib_from_script(self, video):
+        """vib + vib2 for a non-PMV video from its own stroke script (fast, no librosa)."""
+        actions = self.script_actions(video["id"])
+        if len(actions) < 4:
+            raise RuntimeError("Videoen har ingen script at lave vib ud fra")
+        vib, vib2 = vib_from_strokes(actions)
+        notes = "Lavet af Funscript Session ud fra stroke-scriptet"
+        target = generated_vib_path(video["path"])
+        target.parent.mkdir(parents=True, exist_ok=True)
+        for variant, track in (("vib", vib), ("vib2", vib2)):
+            generated_vib_path(video["path"], variant).write_text(json.dumps(
+                {"version": "1.0", "inverted": False, "range": 100,
+                 "metadata": {"title": f"Auto {variant} script", "notes": notes}, "actions": track}),
+                encoding="utf-8")
+        self._scan_one(Path(video["path"]))
+
+    def _make(self, video):
+        """PMVs get beat scripts (+ vib from the music); other videos vib from their script."""
+        if is_beat_video(video) and can_generate():
+            self._generate_one(video)
+        else:
+            self._vib_from_script(video)
+
     def _generate_one(self, video):
         """Beat script for one video, written to the app's own folder and scanned in."""
         import beatgen
@@ -1004,22 +1095,29 @@ class Library:
         try:
             if not video:
                 raise RuntimeError("Ukendt video")
-            if not generated_script_path(video["path"]).is_file():  # a new auto script is used at once
-                with self.lock, self.conn:
+            if is_beat_video(video) and not generated_script_path(video["path"]).is_file():
+                with self.lock, self.conn:  # a new auto script is used at once
                     self.conn.execute("UPDATE videos SET use_auto=1 WHERE id=?", (video_id,))
-            self._generate_one(video)
+            self._make(video)
             self.generate_state["done"] = 1
         except Exception as exc:  # reported to the browser
             self.generate_state["error"] = str(exc)
         finally:
             self.generate_state["running"] = False
 
-    def generate_all(self, redo=False):
-        """Beat scripts for every PMV that has none (or, with redo, make every auto script again
-        with the current version), one after another; can be stopped."""
-        todo = [v for v in self.videos()
-                if ((v.get("hasAuto") and v["playable"]) if redo
-                    else (v.get("canGenerate") or v.get("canMakeVib")))]
+    def generate_all(self, mode="pmv"):
+        """One after another, can be stopped. mode "pmv": beat scripts (+ vib) for PMVs missing
+        them; "vib": vib scripts for the other videos from their script; "redo": every auto
+        script again with the current version."""
+        if mode is True:
+            mode = "redo"
+        videos = self.videos()
+        if mode == "redo":
+            todo = [v for v in videos if v["playable"] and (v.get("hasAuto") or v.get("autoVib"))]
+        elif mode == "vib":
+            todo = [v for v in videos if v.get("canMakeVib") and not v["beat"]]
+        else:
+            todo = [v for v in videos if v["beat"] and (v.get("canGenerate") or v.get("canMakeVib"))]
         state = {"running": True, "videoId": None, "error": "", "done": 0, "total": len(todo),
                  "current": "", "failed": [], "stop": False, "all": True}
         self.generate_state = state
@@ -1029,7 +1127,7 @@ class Library:
                     break
                 state["current"], state["videoId"] = video["name"], video["id"]
                 try:
-                    self._generate_one(video)
+                    self._make(video)
                 except Exception as exc:  # one bad video doesn't stop the rest
                     state["failed"].append({"name": video["name"], "error": str(exc)})
                 state["done"] += 1

@@ -197,6 +197,11 @@ const EN = {
   'Lav alle auto-scripts igen med den nyeste version? Det tager lidt tid. Originaler bliver ikke rørt.':
     'Make all auto scripts again with the newest version? It takes a while. Originals are not touched.',
   'Lav vib': 'Make vib',
+  'Lav vib-scripts til alle andre videoer ({n})': 'Make vib scripts for all other videos ({n})',
+  'Lav vib-scripts ud fra stroke-scriptet til alle videoer uden vib (ikke PMV)? Det går hurtigt. Originaler bliver ikke rørt.':
+    'Make vib scripts from the stroke script for all videos without vib (not PMVs)? It is quick. Originals are not touched.',
+  'Lav vib-scripts til vibratorer (fx Lovense Gush/Edge) ud fra stroke-scriptet': 'Make vib scripts for vibrators (eg. Lovense Gush/Edge) from the stroke script',
+  'Vib-scripts lavet automatisk ud fra stroke-scriptet': 'Vib scripts made automatically from the stroke script',
   'Lav vib-scripts til vibratorer (fx Lovense Gush/Edge) ud fra musikken': 'Make vib scripts for vibrators (eg. Lovense Gush/Edge) from the music',
   'Vib-scripts lavet automatisk ud fra musikken': 'Vib scripts made automatically from the music',
   'Laver script og vib-scripts. Gemmes i mappen "Genererede scripts" i app-mappen, ikke ved videoerne. Tager ca. 1 sek per minut video.':
