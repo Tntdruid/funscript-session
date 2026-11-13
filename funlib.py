@@ -12,6 +12,23 @@ import time
 from pathlib import Path
 
 VIDEO_EXTENSIONS = {".mp4", ".m4v", ".mov", ".mkv", ".webm", ".avi", ".wmv"}
+# Trash cans and system folders (Synology, QNAP, Windows, macOS, Linux) are never scanned.
+SKIP_DIRS = {"#recycle", "@recycle", ".recycle", "$recycle.bin", "recycler", "recycled", "#snapshot",
+             "@eadir", "@tmp", "system volume information", ".trash", ".trashes", "lost+found"}
+
+
+def skip_dir(name):
+    low = name.lower()
+    return low in SKIP_DIRS or low.startswith(".trash-") or low.startswith(".")
+
+
+def video_files(folder):
+    """Video files under `folder`, without going into trash cans or system folders."""
+    out = []
+    for root, dirs, names in os.walk(folder):
+        dirs[:] = [d for d in dirs if not skip_dir(d)]
+        out.extend(Path(root) / n for n in names if Path(n).suffix.lower() in VIDEO_EXTENSIONS)
+    return sorted(out)
 BROWSER_PLAYABLE = {".mp4", ".m4v", ".mov", ".mkv", ".webm"}
 WINDOW_MS = 5000          # speed is measured in 5 second windows
 MIN_CLIP_MS = 20000       # never make clips shorter than this (except a very short library)
@@ -798,8 +815,7 @@ class Library:
         folder = Path(folder or self.library_folder()).expanduser()
         if not folder.is_dir():
             raise ValueError(f"Mappen findes ikke: {folder}")
-        files = sorted(p for p in folder.rglob("*")
-                       if p.is_file() and p.suffix.lower() in VIDEO_EXTENSIONS)
+        files = video_files(folder)
         self.scan_state = {"running": True, "done": 0, "total": len(files), "message": ""}
         seen = set()
         added = updated = 0

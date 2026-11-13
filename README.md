@@ -70,6 +70,9 @@ og udsted et API-token (Application ID). Sessionens samlede script uploades til 
 afspiller det selv i sync med videoen (HSSP). Ved spoling, klipskift eller buffering resynces den
 automatisk. Koden gemmes kun i din browser. Intiface kan stadig vælges til andre enheder.
 
+**Skraldespande springes over:** Scanningen går ikke ind i papirkurve og systemmapper (`#recycle`,
+`@eaDir`, `#snapshot` på Synology, `$RECYCLE.BIN`, `System Volume Information`, `.Trash` og skjulte mapper).
+
 **Kategorier:** Mapperne i biblioteket (fx `X:\Handy\PoV`) bliver kategorier, som kan vælges
 under "Ny session". Mapper med kun én video havner under "Løse filer". Derudover samler "PMV"
 alle PMV/Cock Hero/beat-videoer, uanset hvilken mappe de ligger i.
