@@ -130,7 +130,26 @@ def vib_from_music(y, times):
         vib2.append({"at": int(mid), "pos": level(strength)})
         vib2.append({"at": int(mid + min(180, (t1 - t0) * 0.4)), "pos": level(strength * 0.5)})
     vib2.append({"at": end, "pos": 0})
-    return _clean(vib), _clean(vib2)
+    return spread_vib(_clean(vib)), spread_vib(_clean(vib2))
+
+
+def spread_vib(track):
+    """More life in a vib track: pulse peaks are spread over the whole range by their rank in
+    this video (calm parts really calm, peaks at 100), and the pause after a pulse is deeper."""
+    import bisect
+    pos = [a["pos"] for a in track]
+    peaks = [i for i in range(len(pos) - 1) if pos[i] > 0 and 0 < pos[i + 1] < pos[i]]
+    ranked = sorted(pos[i] for i in peaks)
+    if len(ranked) < 4:
+        return track
+    out = [dict(a) for a in track]
+    for i in peaks:
+        lo, hi = bisect.bisect_left(ranked, pos[i]), bisect.bisect_right(ranked, pos[i])
+        r = ((lo + hi) / 2) / len(ranked)
+        peak = 0.1 + 0.9 * r ** 1.3
+        out[i]["pos"] = int(round(peak * 100 / 5) * 5)
+        out[i + 1]["pos"] = int(round(peak * 30 / 5) * 5)
+    return out
 
 
 def _clean(actions):
