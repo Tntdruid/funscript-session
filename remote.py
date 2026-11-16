@@ -236,6 +236,12 @@ def _handler(remote):
             lib = remote.library
             if path == "/tv/info":
                 return self._json({"ok": True, "app": "Funscript Session"})
+            if path == "/tv/resume":  # where the last session was left (shared with the PC)
+                resume = json.loads(lib.get_setting("resume", "null") or "null")
+                s = lib.session(resume["sessionId"]) if resume else None
+                if not s:
+                    return self._json({"resume": None})
+                return self._json({"resume": {**resume, "name": s["name"], "totalMs": s["totalMs"]}})
             if path == "/tv/sessions":
                 items = []
                 for s in lib.sessions():
@@ -272,6 +278,24 @@ def _handler(remote):
                 return
             return self._json({"error": "Not found"}, 404)
 
+        def _tv_post(self, path, data):
+            """What the TV reports back: played sessions, played time and where it stopped."""
+            lib = remote.library
+            m = re.fullmatch(r"/tv/sessions/(\d+)/played", path)
+            if m:
+                return self._json({"ok": lib.mark_played(int(m.group(1)))})
+            if path == "/tv/stats/tick":
+                lib.add_play_seconds(data.get("seconds", 0))
+                return self._json({"ok": True})
+            if path == "/tv/resume":  # same place as the PC keeps it, so either can go on
+                try:
+                    value = {"sessionId": int(data["sessionId"]), "ms": max(0, int(data["ms"])), "at": time.time()}
+                except (KeyError, TypeError, ValueError):
+                    value = None  # finished or dismissed
+                lib.set_setting("resume", json.dumps(value))
+                return self._json({"ok": True})
+            return self._json({"error": "Not found"}, 404)
+
         def do_GET(self):
             url = urlparse(self.path)
             if url.path.startswith("/tv/"):
@@ -297,13 +321,19 @@ def _handler(remote):
             if url.path == "/tv/pair":  # a TV asks to pair; the user allows it in the app on the PC
                 name = (parse_qs(url.query).get("name") or ["TV"])[0]
                 return self._json(remote.pair_request(name))
-            if url.path != "/api/cmd" or not self._authorised(url):
+            if not self._authorised(url):
                 return self._json({"error": "Forkert eller manglende nøgle"}, 403)
             try:
                 length = min(int(self.headers.get("Content-Length", "0")), 1000)
                 data = json.loads(self.rfile.read(length) or b"{}")
             except ValueError:
                 data = {}
+            if not isinstance(data, dict):
+                data = {}
+            if url.path.startswith("/tv/"):
+                return self._tv_post(url.path, data)
+            if url.path != "/api/cmd":
+                return self._json({"error": "Not found"}, 404)
             command = data.get("cmd") if isinstance(data, dict) else None
             if command not in COMMANDS:
                 return self._json({"error": "Ukendt kommando"}, 400)

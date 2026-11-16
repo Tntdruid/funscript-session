@@ -25,8 +25,13 @@ https://github.com/Tntdruid/TvFin), brugerens egen Jellyfin-app til Tizen.
 AVPlay; sessionstid = `clip.offsetMs + (videoTid - clip.startMs)`; Handy stoppes ved klipskift og startes igen ved
 `started`; drift-korrektion hvert 5. sek hvis > 300 ms). Skærme `funpair` og `funscript` i `app/js/app.js`.
 
-**Ikke lavet endnu / idéer:** Intiface/vibratorer fra tv'et (kræver ws til Intiface på PC'en), statistik/"afspillet"
-tilbage til Funscript, fortsæt-position, tempo (playback_rate), edge-spil og stemme-coach på tv'et.
+**Tilføjet 2026-11-16:** tv'et melder tilbage via `POST /tv/sessions/<id>/played`, `POST /tv/stats/tick {seconds}`
+og `POST /tv/resume {sessionId, ms}` (tom krop = færdig/ryd); `GET /tv/resume`. Positionen er den samme
+`resume`-indstilling som PC'en bruger, så man kan fortsætte på tv eller PC. I TvFin: `Fun.played/tick/saveResume/resume`,
+`FunPlayer.start(cfg, id, exit, startMs)` og en "▶ Fortsæt «navn» fra …"-knap øverst på Funscript-skærmen.
+
+**Ikke lavet endnu / idéer:** Intiface/vibratorer fra tv'et (kræver ws til Intiface på PC'en), tempo (playback_rate),
+edge-spil og stemme-coach på tv'et.
 
 **Test-tip:** kør en kopi med egen database og porte, så de rigtige data ikke røres:
 `FUNSCRIPT_DB=<kopi>.db FUNSCRIPT_PORT=18000 FUNSCRIPT_REMOTE_PORT=18001 FUNSCRIPT_REMOTE_HOST=127.0.0.1 python server.py`

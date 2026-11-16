@@ -235,9 +235,13 @@ til Tizen). Tv'et afspiller klippene efter hinanden og styrer Handy'en direkte (
    Med "Send Handy-opsætningen med" får tv'et dit Application ID og din forbindelseskode, så de ikke skal tastes på tv'et.
 4. Tv'et viser nu sessionerne (🎬 Funscript på forsiden). Fjernbetjening: ◀ ▶ spol 10 sek, ▲ næste klip,
    ▼ forrige klip, OK pause, Tilbage stop.
+5. Tv'et melder tilbage til appen: sessionen tæller som afspillet, spilletiden kommer med i 📊 Statistik, og
+   positionen gemmes. Stopper du midt i en session, står **▶ Fortsæt «navn» fra …** øverst på tv'ets Funscript-skærm –
+   og "Fortsæt" på PC'en tilbyder samme sted (og omvendt).
 
 Sikkerhed: kun fjernbetjenings-serveren (port 8001) kan nås fra netværket. Tv'et får nøglen først når du trykker
-Tillad på PC'en, og kan derefter kun *læse* sessioner og streame deres videoer (`/tv/...`). "Nyt link" laver en ny
+Tillad på PC'en, og kan derefter kun *læse* sessioner og streame deres videoer (`/tv/...`) – plus melde
+afspillet, spilletid og position tilbage. "Nyt link" laver en ny
 nøgle, så tv'et (og mobilen) skal forbindes igen.
 
 ## Sprog / Language
