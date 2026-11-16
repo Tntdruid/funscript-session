@@ -230,7 +230,8 @@ Gemte sessioner kan afspilles på et Samsung-tv med [TvFin](https://github.com/T
 til Tizen). Tv'et afspiller klippene efter hinanden og styrer Handy'en direkte (Handy API v3, HSSP).
 
 1. Slå **📱 Fjernbetjening → Styr fra mobilen** til. Under den står adressen tv'et skal bruge (fx `192.168.1.20:8001`).
-2. På tv'et: **Hvem ser med? → 🎬 Tilslut Funscript**, indtast adressen og tryk Forbind. Tv'et viser en kode.
+2. På tv'et: **⚙ Indstillinger → Tilslut Funscript**. Tv'et søger selv nettet igennem og viser PC'en – vælg den
+   (eller skriv adressen, hvis den ikke findes). Tv'et viser en kode.
 3. På PC'en dukker **"📺 Et tv vil forbinde · kode 1234"** op nederst til højre. Tjek at koden passer og tryk **Tillad**.
    Med "Send Handy-opsætningen med" får tv'et dit Application ID og din forbindelseskode, så de ikke skal tastes på tv'et.
 4. Tv'et viser nu sessionerne (🎬 Funscript på forsiden). Fjernbetjening: ◀ ▶ spol 10 sek, ▲ næste klip,

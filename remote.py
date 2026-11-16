@@ -228,6 +228,8 @@ def _handler(remote):
         def _tv_get(self, url):
             """Read-only endpoints for the TV app (TvFin)."""
             path = url.path
+            if path == "/tv/hello":  # lets TvFin find this PC on the network; reveals nothing else
+                return self._json({"app": "Funscript Session", "name": socket.gethostname()})
             m = re.fullmatch(r"/tv/pair/([\w-]{8,40})", path)
             if m:
                 return self._json(remote.pair_status(m.group(1)))

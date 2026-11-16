@@ -10,6 +10,8 @@ https://github.com/Tntdruid/TvFin), brugerens egen Jellyfin-app til Tizen.
   - `stream_file()` – fælles Range-streaming (bruges nu også af `server.py` `send_video`).
   - Parring à la Quick Connect: `POST /tv/pair?name=…` → `{id, code}` (4 cifre, udløber efter 5 min, maks 5 åbne),
     `GET /tv/pair/<id>` → `pending | approved {key, handy} | denied | expired` (svaret udleveres kun én gang).
+  - `GET /tv/hello` (uden nøgle) → `{app: "Funscript Session", name: <pc-navn>}`, så TvFin kan finde PC'en ved at
+    scanne nettet på port 8001. Afslører intet andet.
   - Læs-kun endpoints med nøglen (`?k=` = `remote_key`): `/tv/info`, `/tv/sessions` (inkl. `thumbVideoId`),
     `/tv/sessions/<id>` (id, name, totalMs, clips, actions), `/tv/media/<videoId>` (Range), `/tv/thumb/<videoId>`.
   - CORS (`Access-Control-Allow-Origin: *`) og `OPTIONS` på `/tv/...`.
