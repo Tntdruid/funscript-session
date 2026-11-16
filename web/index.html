@@ -258,6 +258,7 @@
                   <button id="remoteNewKey" title="Lav et nyt link. Det gamle holder op med at virke">Nyt link</button>
                 </div>
                 <div class="hint">Første gang spørger Windows Firewall om Python må bruge netværket: tillad på private netværk.</div>
+                <div class="hint">📺 TvFin på tv: vælg <b>Funscript</b> og indtast <b id="tvAddress"></b> – godkend derefter tv'et her.</div>
               </div>
             </div>
 
@@ -426,6 +427,14 @@
         </div>
       </form>
     </dialog>
+    <div id="tvPair" class="tv-pair" hidden>
+      <div><b>📺 Et tv vil forbinde</b> · kode <b id="tvPairCode"></b></div>
+      <label class="toggle"><input type="checkbox" id="tvPairHandy" checked /> Send Handy-opsætningen med</label>
+      <div class="inline">
+        <button id="tvPairAllow" class="primary">Tillad</button>
+        <button id="tvPairDeny">Afvis</button>
+      </div>
+    </div>
     <script src="i18n.js"></script>
     <script src="handy.js"></script>
     <script src="app.js"></script>

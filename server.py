@@ -9,7 +9,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlparse
 
-from remote import Remote
+from remote import Remote, stream_file
 from funlib import (Library, remux_dir, generated_dir, build_session, session_funscript, rebuild_session,
                     find_replacement, steer_session, scan_voice_folder, voice_dir)
 
@@ -118,6 +118,8 @@ class Handler(SimpleHTTPRequestHandler):
 
         if path == "/api/health":
             return self.send_json({"status": "ok", "root": str(ROOT)})
+        if path == "/api/tv/pending":  # TVs waiting to be allowed (TvFin)
+            return self.send_json({"pending": REMOTE.pending_pairings() if REMOTE.enabled else []})
         if path == "/api/remote":
             return self.send_json(REMOTE.info())
         if path == "/api/stats":
@@ -240,6 +242,10 @@ class Handler(SimpleHTTPRequestHandler):
         if data is None:
             return self.send_error(400, "Invalid JSON payload")
 
+        if path == "/api/tv/answer":  # allow or deny a TV, optionally handing it the Handy keys
+            ok = REMOTE.answer_pairing(str(data.get("id", "")), bool(data.get("allow")),
+                                       data.get("handy") if data.get("allow") else None)
+            return self.send_json({"ok": ok})
         if path == "/api/remote":  # phone remote on/off (listens on the home network)
             if data.get("newKey"):
                 REMOTE.new_key()
@@ -552,43 +558,7 @@ class Handler(SimpleHTTPRequestHandler):
 
     def send_video(self, file_path):
         """Stream a video with HTTP Range support so the browser can seek."""
-        size = file_path.stat().st_size
-        ctype = VIDEO_TYPES.get(file_path.suffix.lower(), "application/octet-stream")
-        start, end = 0, size - 1
-        range_header = self.headers.get("Range")
-        m = re.match(r"bytes=(\d*)-(\d*)", range_header or "")
-        if m and (m.group(1) or m.group(2)):
-            if m.group(1):
-                start = int(m.group(1))
-                end = int(m.group(2)) if m.group(2) else size - 1
-            else:  # suffix range: last N bytes
-                start = max(0, size - int(m.group(2)))
-            end = min(end, size - 1)
-            if start > end:
-                self.send_response(416)
-                self.send_header("Content-Range", f"bytes */{size}")
-                self.end_headers()
-                return
-            self.send_response(206)
-            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
-        else:
-            self.send_response(200)
-        self.send_header("Content-Type", ctype)
-        self.send_header("Accept-Ranges", "bytes")
-        self.send_header("Content-Length", str(end - start + 1))
-        self.end_headers()
-        try:
-            with open(file_path, "rb") as fh:
-                fh.seek(start)
-                remaining = end - start + 1
-                while remaining > 0:
-                    chunk = fh.read(min(CHUNK, remaining))
-                    if not chunk:
-                        break
-                    self.wfile.write(chunk)
-                    remaining -= len(chunk)
-        except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
-            pass  # browser cancelled the request (normal when seeking)
+        stream_file(self, file_path)
 
     def end_headers(self):
         # Without this the browser may keep using an old app.js/style.css after an update.

@@ -224,6 +224,22 @@ Genveje: mellemrum = afspil/pause, ←/→ = 10 sek, N = næste klip, F = fuldsk
 Klik på videoen = afspil/pause, dobbeltklik = fuldskærm. I fuldskærm vises en kontrollinje,
 når musen bevæges.
 
+## 📺 Se sessioner på tv (TvFin)
+
+Gemte sessioner kan afspilles på et Samsung-tv med [TvFin](https://github.com/Tntdruid/TvFin) (Jellyfin-appen
+til Tizen). Tv'et afspiller klippene efter hinanden og styrer Handy'en direkte (Handy API v3, HSSP).
+
+1. Slå **📱 Fjernbetjening → Styr fra mobilen** til. Under den står adressen tv'et skal bruge (fx `192.168.1.20:8001`).
+2. På tv'et: **Hvem ser med? → 🎬 Tilslut Funscript**, indtast adressen og tryk Forbind. Tv'et viser en kode.
+3. På PC'en dukker **"📺 Et tv vil forbinde · kode 1234"** op nederst til højre. Tjek at koden passer og tryk **Tillad**.
+   Med "Send Handy-opsætningen med" får tv'et dit Application ID og din forbindelseskode, så de ikke skal tastes på tv'et.
+4. Tv'et viser nu sessionerne (🎬 Funscript på forsiden). Fjernbetjening: ◀ ▶ spol 10 sek, ▲ næste klip,
+   ▼ forrige klip, OK pause, Tilbage stop.
+
+Sikkerhed: kun fjernbetjenings-serveren (port 8001) kan nås fra netværket. Tv'et får nøglen først når du trykker
+Tillad på PC'en, og kan derefter kun *læse* sessioner og streame deres videoer (`/tv/...`). "Nyt link" laver en ny
+nøgle, så tv'et (og mobilen) skal forbindes igen.
+
 ## Sprog / Language
 
 Appen findes på dansk og engelsk – skift med **DA/EN** øverst til venstre (valget huskes; første

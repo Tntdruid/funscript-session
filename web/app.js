@@ -2399,6 +2399,7 @@ function showRemote(info) {
   $('remoteOn').checked = info.enabled;
   $('remoteInfo').hidden = !info.enabled;
   $('remoteUrl').value = info.url || '';
+  $('tvAddress').textContent = (info.url || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '');
   const pill = $('remoteState');
   pill.textContent = info.error ? t('Fejl') : !info.enabled ? t('Slået fra')
     : info.phoneSeen ? t('Mobil forbundet') : t('Venter på mobil');
@@ -2440,10 +2441,36 @@ function startRemoteLoops() {
         edge: state.edge ? { edges: state.edge.edges, resting: state.edge.resting } : null,
       } }).catch(() => {});
       if (n % 10 === 9) api('/api/remote').then(showRemote).catch(() => {});
+      if (n % 3 === 0) api('/api/tv/pending').then(showTvPair).catch(() => {});
       await new Promise((r) => setTimeout(r, 1000));
     }
   })();
 }
+
+// ------------------------------------------------------------------ TV pairing (TvFin)
+let tvPairId = null;
+
+function showTvPair({ pending }) {
+  const req = (pending || [])[0];
+  tvPairId = req ? req.id : null;
+  $('tvPair').hidden = !req;
+  if (!req) return;
+  $('tvPairCode').textContent = req.code;
+  const hasHandy = !!(localStorage.getItem('handyAppId') && localStorage.getItem('handyKey'));
+  $('tvPairHandy').disabled = !hasHandy;
+  if (!hasHandy) $('tvPairHandy').checked = false;
+}
+
+async function answerTvPair(allow) {
+  if (!tvPairId) return;
+  const handy = allow && $('tvPairHandy').checked
+    ? { appId: localStorage.getItem('handyAppId') || '', key: localStorage.getItem('handyKey') || '' } : null;
+  try { await api('/api/tv/answer', { method: 'POST', body: { id: tvPairId, allow, handy } }); } catch { /* expired */ }
+  tvPairId = null;
+  $('tvPair').hidden = true;
+}
+$('tvPairAllow').addEventListener('click', () => answerTvPair(true));
+$('tvPairDeny').addEventListener('click', () => answerTvPair(false));
 
 function runRemote(command) {
   const volume = (step) => {

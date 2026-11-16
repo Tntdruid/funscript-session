@@ -411,3 +411,13 @@ kbd { display: inline-block; min-width: 18px; padding: 1px 6px; border: 1px soli
 .link-btn { margin-top: 6px; padding: 0; background: none; border: none; font-size: 11px; color: var(--muted); text-decoration: underline; cursor: pointer; }
 .link-btn:hover { color: var(--text); }
 .vib-badge.auto { background: #2a3355; color: #a7c4ff; }
+
+/* TV pairing request (TvFin) */
+.tv-pair {
+  position: fixed; right: 20px; bottom: 20px; z-index: 1000;
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 16px 18px; border-radius: 12px;
+  background: var(--panel-2); border: 1px solid #3b82f6;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .5);
+}
+.tv-pair[hidden] { display: none; }
