@@ -2987,7 +2987,9 @@ $('tvMode').addEventListener('change', () => {
 });
 ui.offsetSlider.addEventListener('input', showOffset);
 ui.offsetSlider.addEventListener('change', () => { saveJson(offsetKey(), Number(ui.offsetSlider.value)); handySync(); });
+// Stroke range: remembered between visits (it used to reset to 0–100 on every reload)
 [ui.rangeMin, ui.rangeMax].forEach((el) => el.addEventListener('change', () => {
+  saveJson('strokeRange', [Number(ui.rangeMin.value), Number(ui.rangeMax.value)]);
   Handy.setRange(Number(ui.rangeMin.value), Number(ui.rangeMax.value)).catch(() => {});
 }));
 [ui.rangeMin, ui.rangeMax].forEach((el) => el.addEventListener('input', () => {
@@ -2997,6 +2999,12 @@ ui.offsetSlider.addEventListener('change', () => { saveJson(offsetKey(), Number(
   }
   ui.rangeLabel.textContent = `${ui.rangeMin.value} – ${ui.rangeMax.value}`;
 }));
+(() => {
+  const [lo, hi] = loadJson('strokeRange', [0, 100]);
+  ui.rangeMin.value = clamp(Number(lo) || 0, 0, 95);
+  ui.rangeMax.value = clamp(Number(hi) || 100, Number(ui.rangeMin.value) + 5, 100);
+  ui.rangeLabel.textContent = `${ui.rangeMin.value} – ${ui.rangeMax.value}`;
+})();
 
 document.addEventListener('keydown', (e) => {
   if (meta.dialog.open || $('helpDialog').open || $('statsDialog').open) return; // dialogs handle their own keys (Esc closes them)
