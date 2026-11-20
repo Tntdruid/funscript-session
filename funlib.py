@@ -11,6 +11,8 @@ import threading
 import time
 from pathlib import Path
 
+VERSION = "1.0.0"  # also in CHANGELOG.md / CHANGELOG.da.md
+
 VIDEO_EXTENSIONS = {".mp4", ".m4v", ".mov", ".mkv", ".webm", ".avi", ".wmv"}
 # Trash cans and system folders (Synology, QNAP, Windows, macOS, Linux) are never scanned.
 SKIP_DIRS = {"#recycle", "@recycle", ".recycle", "$recycle.bin", "recycler", "recycled", "#snapshot",

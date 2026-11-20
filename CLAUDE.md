@@ -38,3 +38,13 @@ edge-spil og stemme-coach på tv'et.
 **Test-tip:** kør en kopi med egen database og porte, så de rigtige data ikke røres:
 `FUNSCRIPT_DB=<kopi>.db FUNSCRIPT_PORT=18000 FUNSCRIPT_REMOTE_PORT=18001 FUNSCRIPT_REMOTE_HOST=127.0.0.1 python server.py`
 (sæt `export_path` i kopiens settings til en temp-mappe, ellers skriver den .funscript-filer i `sessions\`).
+
+## Udgivelse ("push" i dette repo)
+
+Første version var **1.0.0** (2026-11-20). Ved "push":
+1. Syntaks-tjek: `python -W error -m py_compile funlib.py server.py remote.py beatgen.py` og `node --check web/*.js`
+   (der er ingen testsuite) – plus en hurtig start af en kopi (`/api/health` viser versionen).
+2. Hæv `VERSION` i `funlib.py` (ny funktion = minor, rettelse = patch).
+3. Nyt afsnit øverst i **både** `CHANGELOG.md` (engelsk) og `CHANGELOG.da.md` (dansk). Nye funktioner også i
+   **både** `README.md` (engelsk) og `README.da.md` (dansk).
+4. Commit `vX.Y.Z: kort beskrivelse`, tag `vX.Y.Z`, push (også tagget) og GitHub-release med changelog-afsnittet.

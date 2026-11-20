@@ -10,7 +10,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, urlparse
 
 from remote import Remote, stream_file
-from funlib import (Library, remux_dir, generated_dir, build_session, session_funscript, rebuild_session,
+from funlib import (VERSION, Library, remux_dir, generated_dir, build_session, session_funscript, rebuild_session,
                     find_replacement, steer_session, scan_voice_folder, voice_dir)
 
 ROOT = Path(__file__).resolve().parent
@@ -117,7 +117,7 @@ class Handler(SimpleHTTPRequestHandler):
         path = url.path
 
         if path == "/api/health":
-            return self.send_json({"status": "ok", "root": str(ROOT)})
+            return self.send_json({"status": "ok", "version": VERSION, "root": str(ROOT)})
         if path == "/api/tv/pending":  # TVs waiting to be allowed (TvFin)
             return self.send_json({"pending": REMOTE.pending_pairings() if REMOTE.enabled else []})
         if path == "/api/remote":
@@ -585,5 +585,5 @@ if __name__ == "__main__":
         REMOTE.start()
         print(REMOTE.error or f"Fjernbetjening: {REMOTE.info()['url']}")
     httpd = ThreadingHTTPServer((HOST, PORT), Handler)
-    print(f"Funscript Session Player kører på http://{HOST}:{PORT}")
+    print(f"Funscript Session Player {VERSION} kører på http://{HOST}:{PORT}")
     httpd.serve_forever()

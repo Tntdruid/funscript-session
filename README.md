@@ -1,261 +1,263 @@
+**English** | [Dansk](README.da.md)
+
 # Funscript Session Player
 
-En let funscript-player der bygger sessioner af en bestemt længde (fx 15 min) ud fra
-klip fra flere videoer, valgt så scriptets hastighed passer sammen.
+A lightweight funscript player that builds sessions of a chosen length (e.g. 15 min) from clips of many
+videos, picked so the script speed fits together.
 
-## Kør det
+## Run it
 
 ```bash
 python server.py
 ```
 
-Åbn http://127.0.0.1:8000 – vælg mappen med dine videoer og tryk **Scan**.
+Open http://127.0.0.1:8000 – choose the folder with your videos and press **Scan**.
 
-Kræver kun Python 3.9+ (ingen pakker). `ffprobe` bruges til videolængde hvis det er installeret,
-ellers bruges længden af scriptet.
+Only needs Python 3.9+ (no packages; tested with 3.12). `ffprobe` is used for the video length when it is
+installed, otherwise the length of the script is used.
 
-## Sådan virker det
+## How it works
 
-1. **Scan** finder videoer og deres script på filnavn (`Video.mp4` → `Video.funscript`).
-   Hvert script analyseres i 5-sekunders vinduer: gennemsnitlig hastighed i *u/s*
-   (positions-enheder per sekund, 0–100 skala). Resultatet gemmes i `funscript.db` (SQLite),
-   så kun nye/ændrede filer analyseres igen.
-2. **Byg session** vælger længde, tid per video, mål-hastighed og forløb
-   (konstant, opbygning eller bølger). For hvert klip findes det stykke i hver video
-   hvis hastighed ligger tættest på målet (og er mest stabilt). Videoer der afviger mere
-   end ±30% bruges kun hvis intet andet passer.
-   Valget er også "naturligt": klip starter og slutter ved et vendepunkt i slaget eller en pause
-   (højst ±2,5 sek flyttet), næste klip starter helst i samme position som det forrige sluttede,
-   slaglængden ligner det forrige klip, en video i samme kategori eller med fælles genre/skuespiller
-   foretrækkes som opfølger, og intro/rulletekster (første og sidste 4%) undgås.
-   **Takt-sync:** PMV/Cock Hero-videoer (kendt på mappe, genre eller navn) klippes kun på
-   bundslaget – i beat-synkrone scripts er det musikkens beat – og efter et PMV-klip foretrækkes et
-   klip med samme tempo (slag/min, eller halv/dobbelt takt). Tempoet vises i klip-info.
+1. **Scan** finds videos and their script by file name (`Video.mp4` → `Video.funscript`).
+   Each script is analysed in 5-second windows: average speed in *u/s* (position units per second,
+   0–100 scale). The result is stored in `funscript.db` (SQLite), so only new/changed files are analysed again.
+2. **Build session** picks the length, time per video, target speed and course (constant, build-up or waves).
+   For each clip the part of each video whose speed is closest to the target (and steadiest) is found. Videos
+   that are more than ±30% off are only used when nothing else fits.
+   The choice is also "natural": clips start and end at a turning point of a stroke or a pause (moved at most
+   ±2.5 s), the next clip preferably starts in the position where the previous one ended, the stroke length is
+   similar to the previous clip, a video in the same category or with a shared genre/actor is preferred as a
+   follow-up, and intros/credits (first and last 4%) are avoided.
+   **Beat sync:** PMV/Cock Hero videos (recognised by folder, genre or name) are only cut on the bottom stroke –
+   in beat-synced scripts that is the music's beat – and after a PMV clip a clip with the same tempo
+   (strokes/min, or half/double time) is preferred. The tempo is shown in the clip info.
 
-**Auto-scripts til PMV'er:** PMV'er uden script får knappen "🎵 Lav script". Appen finder musikkens
-beat (librosa, i 30-sekunders stykker, så tempo-skift i kompilationer følges) og laver ét slag per
-beat – bunden på beatet, slaglængde efter musikkens styrke, stille passager står stille. Scriptet
-gemmes i mappen `Genererede scripts` i app-mappen (aldrig ved siden af videoen) med samme
-mappestruktur og navn som videoen – `X:\PMV.mp4` → `Genererede scripts\X\PMV.funscript` – så de
-kan kopieres over til videoen hvis man vil bruge dem i andre players. De markeres "auto". Under
-Bibliotek laver "🎵 Lav scripts til alle PMV'er (N)" scripts til dem alle i baggrunden (med
-fremskridt og Stop), og 📂 åbner mappen. Testet mod rigtige PMV-scripts: 71–99 % af de automatiske
-slag lander på et rigtigt slag. Kræver `pip install librosa`; uden den vises knapperne ikke.
-PMV'er der allerede har et script, får knappen "🎵 Nyt script": appen laver et auto-script ved siden
-af (originalen bliver aldrig rørt) og bruger det. Knappen "auto ⇄ / original ⇄" skifter mellem de to.
-"↻ Lav auto-scripts forfra" laver alle auto-scripts igen med den nyeste version af beat-genkendelsen.
-Manglende beats midt i musikken bliver fyldt ud, så der ikke kommer huller i scriptet.
+**Auto scripts for PMVs:** PMVs without a script get the button "🎵 Make script". The app finds the music's beat
+(librosa, in 30-second pieces so tempo changes in compilations are followed) and makes one stroke per beat – the
+bottom on the beat, stroke length from how loud the music is, quiet passages hold still. The script is saved in
+the `Genererede scripts` folder in the app folder (never next to the video) with the same folder layout and name
+as the video – `X:\PMV.mp4` → `Genererede scripts\X\PMV.funscript` – so it can be copied next to the video to use
+in other players. It is marked "auto". Under Library, "🎵 Make scripts for all PMVs (N)" makes scripts for all of
+them in the background (with progress and Stop), and 📂 opens the folder. Tested against real PMV scripts: 71–99%
+of the automatic strokes land on a real stroke. Needs `pip install librosa`; without it the buttons are hidden.
+PMVs that already have a script get the button "🎵 New script": the app makes an auto script alongside (the
+original is never touched) and uses it. The "auto ⇄ / original ⇄" button switches between the two.
+"↻ Remake auto scripts" makes all auto scripts again with the newest version of the beat detection. Missing beats
+in the middle of the music are filled in, so there are no holes in the script.
 
-**Auto vib-scripts:** Samtidig laves `.vib` og `.vib2` til vibratorer (fx Lovense Gush 2 og Edge):
-`.vib` pulserer på beatet og bliver stærkere når musikken er høj, `.vib2` (motor 2) pulserer på
-mellemslaget med bassens styrke, så de to motorer skiftes. De bruges kun når videoen ikke har sine egne vib-scripts. PMV'er der har et script men ingen
-vib, får knappen "📳 Lav vib", og "Lav scripts til alle PMV'er" laver dem også.
-Andre videoer (ikke PMV) kan få vib-scripts ud fra deres stroke-script: én puls per slag, stærkere
-jo hurtigere slaget er, og hurtige slag samles til pulser på mindst 250 ms. `.vib2` pulserer midt i
-hvert slag med det samlede tempos styrke. Brug "📳 Lav vib" på en video eller "📳 Lav vib-scripts til alle andre videoer" (tager et par
-minutter for flere hundrede videoer, kræver ikke librosa).
-3. Klippene lægges efter hinanden og der samles ét funscript for hele sessionen, som gemmes
-   i databasen og kan downloades som `.funscript`.
-4. Afspilleren skifter sømløst mellem klip (næste klip forudindlæses) og styrer en enhed via
-   Intiface Central (Buttplug, `linear` for Handy/OSR, `vibrate` for vibratorer).
+**Auto vib scripts:** At the same time `.vib` and `.vib2` are made for vibrators (e.g. Lovense Gush 2 and Edge):
+`.vib` pulses on the beat and gets stronger when the music is loud, `.vib2` (motor 2) pulses on the off-beat with
+the strength of the bass, so the two motors take turns. The strength is spread over the whole range within each
+video (calm parts are really calm, peaks reach the top) with a clear pause after each pulse. They are only used
+when the video has no vib scripts of its own. PMVs that have a script but no vib get the button "📳 Make vib",
+and "Make scripts for all PMVs" makes them too.
+Other videos (not PMVs) can get vib scripts from their stroke script: one pulse per stroke, stronger the faster
+the stroke, and quick strokes are pooled into pulses of at least 250 ms. `.vib2` pulses half way through each
+stroke with the strength of the overall pace. Use "📳 Make vib" on a video or "📳 Make vib scripts for all other
+videos" (a few minutes for several hundred videos, does not need librosa).
 
-Hver session gemmes også automatisk som `.funscript` i mappen `sessions\` (kan ændres under
-"Gemte sessioner"). Filen hedder fx `004 - 15 min · Opbygning · 216 u-s.funscript`, og listen
-over klip står i scriptets metadata. Sletter man en session i appen, bliver filen liggende.
+3. The clips are laid one after another and one funscript for the whole session is assembled, stored in the
+   database and downloadable as `.funscript`.
+4. The player switches seamlessly between clips (the next clip is preloaded) and drives a device via Intiface
+   Central (Buttplug, `linear` for Handy/OSR, `vibrate` for vibrators).
 
-**Handy direkte (firmware 4, Handy API v3):** Vælg "Handy direkte" under Enhed, indtast dit
-Application ID og forbindelseskoden fra Handy-appen og tryk Forbind. Application ID kræver en gratis
-udviklerkonto: anmod om invitation på https://user.handyfeeling.com/invite, registrér dig, log ind
-og udsted et API-token (Application ID). Sessionens samlede script uploades til Handys egen script-hosting, og Handy'en
-afspiller det selv i sync med videoen (HSSP). Ved spoling, klipskift eller buffering resynces den
-automatisk. Koden gemmes kun i din browser. Intiface kan stadig vælges til andre enheder.
+Each session is also saved automatically as `.funscript` in the `sessions\` folder (can be changed under
+"Saved sessions"). The file is named e.g. `004 - 15 min · Build-up · 216 u-s.funscript`, and the list of clips is
+in the script's metadata. Deleting a session in the app leaves the file.
 
-**Skraldespande springes over:** Scanningen går ikke ind i papirkurve og systemmapper (`#recycle`,
-`@eaDir`, `#snapshot` på Synology, `$RECYCLE.BIN`, `System Volume Information`, `.Trash` og skjulte mapper).
+**The Handy directly (firmware 4, Handy API v3):** Enter your Application ID and the connection key from the
+Handy app under Devices and press Connect. The Application ID needs a free developer account: request an
+invitation at https://user.handyfeeling.com/invite, register, log in and issue an API token (Application ID).
+The session's combined script is uploaded to Handy's own script hosting, and the Handy plays it by itself in sync
+with the video (HSSP). On seeking, clip changes or buffering it resyncs automatically. The keys are only stored in
+your browser. Intiface can still be used for other devices.
 
-**Kategorier:** Mapperne i biblioteket (fx `X:\Handy\PoV`) bliver kategorier, som kan vælges
-under "Ny session". Mapper med kun én video havner under "Løse filer". Derudover samler "PMV"
-alle PMV/Cock Hero/beat-videoer, uanset hvilken mappe de ligger i.
+**Trash cans are skipped:** The scan does not go into recycle bins and system folders (`#recycle`, `@eaDir`,
+`#snapshot` on Synology, `$RECYCLE.BIN`, `System Volume Information`, `.Trash` and hidden folders).
 
-**Overgange:** Mellem klip glider scriptet over 600 ms i stedet for at hoppe, og billedet tones over.
-Slås "Glidende overgange mellem klip" fra, er hvert punkt i sessionens script 100% fra dine
-originale filer (kun klippenes start/slut-punkter beregnes, og de ligger på den originale kurve).
+**Categories:** The folders in the library (e.g. `X:\Handy\PoV`) become categories that can be chosen under
+"New session". Folders with just one video end up under "Loose files". On top of that, "PMV" gathers all
+PMV/Cock Hero/beat videos, whichever folder they are in.
 
-**Vibratorer (Lovense Edge, Gush 2 m.fl.):** Forbind via Intiface Central under "Enheder" – kan køre
-samtidig med Handy direkte. Scan finder `Video.vib.funscript` (motor 1) og `Video.vib2.funscript`
-(motor 2, fx Edge). Under "Vibration" vælges: "Automatisk" (standard – vibration kun når en vibrator er forbundet
-via Intiface, når sessionen bygges; ellers kun slag), "Ingen vibration (kun Handy/slag)" (ingen
-vib-spor eller .vib-filer), "Brug .vib-script – afled af slag, hvor det mangler", eller "Kun videoer med
-.vib-script". Sessionen gemmes også som `.vib.funscript`/`.vib2.funscript`.
-Kommandoer sendes kun ved ændringer (maks ~10/s), så Bluetooth ikke overbelastes. "Vib-styrke"
-skalerer alle vibratorer.
+**Transitions:** Between clips the script glides over 600 ms instead of jumping, and the picture fades over.
+With "Smooth transitions between clips" off, every point in the session's script is 100% from your original
+files (only the clips' start/end points are calculated, and they lie on the original curve).
 
-**Temperatur:** Med "Handy direkte" vises motortemperaturen (læses hvert 5. sek under afspilning).
-10 °C under grænsen vises en advarsel. Over grænsen (standard 70 °C, kan sættes 50–74 °C) pauser
-appen og blokerer ▶, indtil motoren er 8 °C under grænsen. Den starter ikke selv igen. Handy'en har
-desuden sin egen indbyggede beskyttelse ved 75 °C.
+**Vibrators (Lovense Edge, Gush 2 and others):** Connect via Intiface Central under "Devices" – can run at the
+same time as the Handy. Scan finds `Video.vib.funscript` (motor 1) and `Video.vib2.funscript` (motor 2, e.g.
+Edge). Under "Vibration" choose: "Automatic" (default – vibration only when a vibrator is connected via Intiface
+when the session is built; otherwise strokes only), "No vibration (Handy/strokes only)", "Use .vib script – derive
+from strokes where it is missing", or "Only videos with a .vib script". The session is also saved as
+`.vib.funscript`/`.vib2.funscript`. Commands are only sent on changes (max ~10/s), so Bluetooth is not overloaded.
+"Vib strength" scales all vibrators.
 
-**Favoritter og frasortering:** ★ på en video gør at den foretrækkes i sessioner, 👎 betyder at den
-aldrig bruges. "Kun favoritter" bygger sessioner udelukkende af ★-videoer.
+**Temperature:** With the Handy connected directly, the motor temperature is shown (read every 5 s while
+playing). 10 °C below the limit a warning is shown. Above the limit (default 70 °C, can be set to 50–74 °C) the
+app pauses and blocks ▶ until the motor is 8 °C below the limit. It does not restart by itself. The Handy also has
+its own built-in protection at 75 °C.
 
-**Klip i sessionen:** Under afspilleren vises alle klip i den åbne session med billede, titel,
-hastighed og længde. Det aktive klip er markeret; klik for at springe til et klip. Sessionen
-omdøbes med ✎ (eller dobbeltklik på navnet) – også fra listen over gemte sessioner. De gemte
-filer i `sessions\` får samme nye navn.
+**Favourites and never use:** ★ on a video makes it preferred in sessions, 👎 means it is never used.
+"Favourites only" builds sessions from ★ videos only.
 
-**Overrask mig:** 🎲 ved "Byg session" bygger en session med tilfældigt forløb, hastighed og
-(nogle gange) kategori, med den valgte længde. "Overraskelser ⚡" (under Flere indstillinger) giver
-2–4 uventede sving per 20 min: ⚡ et kort udbrud (+40%), ⏸ en pludselig pause eller 🔥 et ekstra
-edge (op og så stop). De vises på klip-kortene.
+**Clips in the session:** Below the player all clips in the open session are shown with picture, title, speed and
+length. The active clip is marked; click to jump to a clip. Hover a clip to preview exactly that clip (muted).
+Rename the session with ✎ (or double-click the name) – also from the list of saved sessions. The saved files in
+`sessions\` get the same new name.
 
-**Lyd-signaler:** 🔔 ved afspilleren. Korte, diskrete lyde (laves i browseren, intet at hente):
-klokke ved start/slut på opvarmning, sus op/ned ved temposkift, dyb tone ved pause, "zap" ved
-udbrud, stigende tone ved edge, gong ved finale, to tik ved sidste minut og et blip ved ▲▼.
-Højst hvert 4. sek (vigtige 1,5 sek). Lydstyrke og 🔊 prøve under Enheder → Justering.
+**Surprise me:** 🎲 next to "Build session" builds a session with a random course, speed and (sometimes)
+category, with the chosen length. "Surprises ⚡" (under More settings) gives 2–4 unexpected turns per 20 min:
+⚡ a short burst (+40%), ⏸ a sudden pause or 🔥 an extra edge (up and then stop). They are shown on the clip cards.
 
-**Stemme fra Home Assistant:** Under Justering → Signaler kan "Stemme (Home Assistant)" vælges.
-Lav teksterne i `stemme-tekster.txt` med HA's TTS (fx Christel); HA gemmer dem som mp3 med teksten
-som titel. Angiv HA's tts-mappe (fx `\<ha>\config	ts`) og tryk "Hent stemmer": appen læser
-titlerne, kopierer de matchende filer til sin cache (HA-mappen bliver kun læst) og bruger dem
-fremover. Tekster uden optagelse falder tilbage til lyd-signalet. Kun på dansk.
+**Sound cues:** 🔔 at the player. Short, discreet sounds (made in the browser, nothing to download): a bell at the
+start/end of the warm-up, a swoosh up/down on tempo changes, a deep tone at a pause, a "zap" on a burst, a rising
+tone on an edge, a gong at the finale, two ticks at the last minute and a blip on ▲▼. At most every 4 s
+(important ones 1.5 s). Volume and 🔊 test under Devices → Adjustment.
 
-**Live-styring:** Under afspilning vælger ▲ (eller pil op) hurtigere og ▼ (pil ned) roligere
-kommende klip (±15% per tryk), og ⏹ erstatter resten med ca. 2 min finale. Klippet, der spiller
-nu, fortsætter uforstyrret; Handy'en får det nye script i baggrunden. Ændringen gemmes i sessionen.
+**Voice from Home Assistant:** Under Adjustment → Cues, "Voice (Home Assistant)" can be chosen. Make the lines in
+`stemme-tekster.txt` with HA's TTS (e.g. Christel); HA saves them as mp3 with the text as the title. Enter HA's
+tts folder (e.g. `\\<ha>\config\tts`) and press "Get voices": the app reads the titles, copies the matching files
+to its cache (the HA folder is only read) and uses them from then on. Lines without a recording fall back to the
+sound cue. Danish only.
 
-**Lærer hvad du kan lide:** Klip du ser færdige tæller positivt; klip du springer over (⏭ før
-halvvejs), bytter eller fjerner tæller negativt. Sessioner foretrækker derefter de videoer du kan
-lide (♥ i gitteret, sortér "Mest kunne lide") og undgår de stykker du sprang over. Det vejer mindre
-end ★, nyere handlinger tæller mest, og "Glem det lærte" i gitteret nulstiller.
+**Live steering:** While playing, ▲ (or arrow up) picks faster and ▼ (arrow down) calmer upcoming clips (±15%
+per press), and ⏹ replaces the rest with about 2 min of finale. The clip playing now continues undisturbed; the
+Handy gets the new script in the background. The change is saved in the session.
 
-**Opvarmning:** "Opvarmning (kun video)" (0–10 min) lægger rolige klip før sessionen, hvor
-Handy'en holder stille og vibratorer er slukket; derefter glider den ind i sessionen. Nedtællingen
-vises ved afspilleren, og opvarmningen er markeret blå på tidslinjen. Den bevares ved redigering
-og "Byg lignende".
+**Learns what you like:** Clips you watch to the end count positively; clips you skip (⏭ before half way), swap
+or remove count negatively. Sessions then prefer the videos you like (♥ in the grid, sort "Liked most (learned)")
+and avoid the parts you skipped. It weighs less than ★, recent actions count most, and "Forget what was learned"
+in the grid resets it.
 
-**Byg lignende:** "🔁 Byg lignende" (ved sessionens navn eller i listen) laver en ny session med
-præcis samme indstillinger og videoudvalg, men nye klip – den forrige sessions stykker undgås.
+**Warm-up:** "Warm-up (video only)" (0–10 min) puts calm clips before the session, where the Handy holds still and
+vibrators are off; then it glides into the session. The countdown is shown at the player, and the warm-up is
+marked blue on the timeline. It is kept when editing and with "Build similar".
 
-**Rediger klip:** Hold musen over et klip: 🔄 bytter det med et andet stykke video i samme hastighed
-og længde (helst en video, der ikke allerede er med – tryk igen for et nyt forslag), ✕ fjerner det.
-Træk et klip for at flytte det. Slag- og vib-scriptet bygges om med sessionens indstillinger, og
-de gemte filer i `sessions\` opdateres.
+**Build similar:** "🔁 Build similar" (next to the session's name or in the list) makes a new session with exactly
+the same settings and video selection, but new clips – the previous session's parts are avoided.
 
-**Ens lydstyrke:** Serveren måler lydniveauet for hver video i baggrunden (ffmpeg, 4 prøver á 20 sek;
-ca. 5 min for 330 videoer første gang, derefter kun nye/ændrede). Under afspilning skrues hver video
-op/ned mod bibliotekets median (højst +18/−15 dB), med en blid kompressor og en limiter mod
-forvrængning. Knappen ≋ ved lydstyrken slår det til/fra; tooltip viser korrektionen for videoen.
+**Edit clips:** Hover a clip: 🔄 swaps it with another part of a video with the same speed and length (preferably
+a video not already in the session – press again for a new suggestion), ✕ removes it. Drag a clip to move it. The
+stroke and vib scripts are rebuilt with the session's settings, and the saved files in `sessions\` are updated.
 
-**Fortsæt hvor du slap:** Positionen gemmes i databasen hvert 5. sek under afspilning og ved pause.
-Næste gang appen åbnes, tilbydes "Fortsæt … fra 7:32". Færdigspillede sessioner tilbydes ikke.
+**Even volume:** The server measures the loudness of each video in the background (ffmpeg, 4 samples of 20 s;
+about 5 min for 330 videos the first time, then only new/changed ones). While playing, each video is turned up or
+down towards the library's median (at most +18/−15 dB), with a gentle compressor and a limiter against
+distortion. The ≋ button next to the volume turns it on/off; the tooltip shows the correction for the video.
 
-**Script-tjek:** Scan finder scripts, der slutter mindst 1 min før videoen, er længere end videoen,
-har pauser på 1½ min eller mere, eller har ekstremt hurtige stykker (over 800 u/s). De markeres med ⚠
-(hold musen over for detaljer), kan sorteres øverst i gitteret, og sessioner undgår stykker med
-ekstrem hastighed eller meget stilstand.
+**Continue where you left off:** The position is saved in the database every 5 s while playing and on pause. The
+next time the app opens, "Continue … from 7:32" is offered. Finished sessions are not offered.
 
-**Forhåndsvisning:** Hold musen over et kort i gitteret – videoen spiller lydløst og springer
-gennem fire steder; en hvid markør på hastighedskurven viser hvor.
+**Script check:** Scan finds scripts that end at least 1 min before the video, are longer than the video, have
+pauses of 1½ min or more, or have extremely fast parts (over 800 u/s). They are marked with ⚠ (hover for
+details), can be sorted to the top of the grid, and sessions avoid parts with extreme speed or a lot of stillness.
 
-**⭐ Yndlingssteder:** Tryk ⭐ eller B (eller ⭐ på mobilen) mens noget spiller, du kan lide. Sessioner
-vælger derefter oftere netop den del af videoen (og videoer med ⭐ lidt oftere). Kan fortrydes.
+**Preview:** Hover a card in the grid – the video plays muted and jumps through four places; a white marker on the
+speed curve shows where.
 
-**∞ Uendelig:** Med ∞ slået til bygges en lignende session med nye klip 1½ minut før slutningen, og den
-tager over, når den gamle slutter, så det bare fortsætter, indtil du stopper.
+**⭐ Favourite spots:** Press ⭐ or B (or ⭐ on the phone) while something you like is playing. Sessions then pick
+that part of the video more often (and videos with ⭐ a little more often). Can be undone.
 
-**🎯 Edge-spil:** 🎯 ved siden af "Byg session" bygger en opbyggende session. Tryk "😮 Tæt på" (E, eller
-på mobilen), når du er tæt på: enhederne holder pause (20 s, lidt længere hver gang), de næste klip
-vælges roligere, og så bygger den op igen. Til sidst ser du, hvor mange gange og hvor længe du holdt.
+**∞ Endless:** With ∞ on, a similar session with new clips is built 1½ minutes before the end, and it takes over
+when the old one ends, so it just goes on until you stop.
 
-**Forhåndsvisning:** Hold musen over et klip i klip-stribe for at se netop det klip (uden lyd).
+**🎯 Edge game:** 🎯 next to "Build session" builds a build-up session. Press "😮 Close" (E, or on the phone) when
+you are close: the devices pause (20 s, a little longer each time), the next clips are picked calmer, and then it
+builds up again. At the end you see how many times and how long you held out.
 
-**📊 Statistik og backup:** Spilletid (i alt og de sidste 7 dage), sessioner, mest brugte videoer og
-kategorier, hvor mange klip du ser færdig, ⭐-steder og edge-spil. "💾 Gem backup" gemmer alt, du har
-lavet og valgt (også opsætninger) i én fil; "📂 Gendan backup" lægger den sammen med det, der er her,
-uden at slette noget. Handy-nøgler kommer ikke med i backuppen.
+**📊 Statistics and backup:** Played time (in total and the last 7 days), sessions, most used videos and
+categories, how many clips you watch to the end, ⭐ spots and edge games. "💾 Save backup" saves everything you
+made and chose (set-ups too) in one file; "📂 Restore backup" merges it with what is here, without deleting
+anything. Handy keys are not included in the backup.
 
-**Gemte opsætninger:** "＋ Gem opsætning" over "Byg session" gemmer dine valg (længde, forløb,
-hastighed, kategorier, opvarmning, overraskelser osv.) som en knap; ét tryk sætter dem og bygger.
+**Saved set-ups:** "＋ Save set-up" above "Build session" saves your choices (length, course, speed, categories,
+warm-up, surprises and so on) as a button; one press sets them and builds.
 
-**Fortryd:** 👎, sletning af en session og "Glem det lærte" viser en besked i bunden med "Fortryd" i 6
-sekunder i stedet for en popup. Sletninger sker først, når beskeden forsvinder.
+**Undo:** 👎, deleting a session and "Forget what was learned" show a message at the bottom with "Undo" for 6
+seconds instead of a popup. Deletions only happen when the message goes away.
 
-**Forbind automatisk:** Handy og Intiface forbinder selv, når appen åbner, hvis de var forbundet sidst.
-"Afbryd" slår det fra igen.
+**Connect automatically:** The Handy and Intiface connect by themselves when the app opens if they were connected
+last time. "Disconnect" turns that off again.
 
-**Hjælp:** ? øverst (eller tasten ?) viser alle tastaturgenveje og hvad knapperne gør.
+**Help:** ? at the top (or the ? key) shows all keyboard shortcuts and what the buttons do.
 
-**Afspil på tv (Samsung m.fl.):** Tryk Win+K på PC'en og vælg tv'et (Skærmspejling), og brug ⛶
-fuldskærm. Slå "📺 Spejler til tv" til under Justering: billedet kommer lidt senere frem på tv'et, så
-Handy og vibratorer venter tilsvarende (start −250 ms, kan stilles fra −1500 til +500 ms). Tv og PC
-husker hver sin forsinkelse.
-"🎯 Kalibrér forsinkelse" viser en cirkel, der blinker og klikker hvert sekund, mens Handy rammer bunden
-på blinket (vibratorer giver et puls). Træk i skyderen (eller ← →) til de passer, og tryk Gem.
+**Play on a TV (Samsung and others):** Press Win+K on the PC and choose the TV (Screen mirroring), and use ⛶
+fullscreen. Turn on "📺 Mirroring to TV" under Adjustment: the picture shows up a little later on the TV, so the
+Handy and vibrators wait as much (starts at −250 ms, can be set from −1500 to +500 ms). The TV and the PC each
+remember their own delay.
+"🎯 Calibrate delay" shows a circle that flashes and clicks every second while the Handy hits the bottom on the
+flash (vibrators give a pulse). Drag the slider (or ← →) until they match, and press Save.
 
-**Fjernbetjening fra mobilen:** Slå "📱 Styr fra mobilen" til under Enheder, og åbn linket på mobilen
-(samme wifi). Her er afspil/pause, forrige/næste, ✋ hold stille (enhederne står stille, videoen kører
-videre, også H på tastaturet), ▼▲⏹, tempo og lydstyrke. Fjernbetjeningen kører på port 8001 og kan kun
-styre afspilningen, og kun med nøglen i linket; resten af appen kan stadig kun nås fra PC'en selv.
-"Nyt link" laver en ny nøgle. Første gang spørger Windows Firewall: tillad Python på private netværk.
+**Remote control from the phone:** Turn on "📱 Control from phone" under Devices, and open the link on the phone
+(same wifi). It has play/pause, previous/next, ✋ hold still (the devices stop, the video plays on – also H on the
+keyboard), ▼▲⏹, tempo and volume. The remote runs on port 8001 and can only control playback, and only with the
+key in the link; the rest of the app can still only be reached from the PC itself. "New link" makes a new key.
+The first time, Windows Firewall asks: allow Python on private networks.
 
-**Rediger metadata:** ✎ på et billede i det store overblik åbner en editor til titel, skuespillere,
-genrer, studie og år. Rettelserne gemmes i appens database og overlever en ny scanning; .nfo-filerne
-bliver aldrig ændret. "Nulstil til .nfo" fjerner rettelserne igen.
+**Edit metadata:** ✎ on a picture in the big overview opens an editor for title, actors, genres, studio and year.
+The edits are stored in the app's database and survive a new scan; the .nfo files are never changed.
+"Reset to .nfo" removes the edits again.
 
-**Stort overblik:** "⊞ Vis store billeder" åbner et gitter med store billeder, titler, skuespillere og
-år fra Jellyfin-`.nfo`-filerne. Søg i titel/skuespiller/genre/studie, filtrér på genre, skuespiller og kategori,
-sortér (navn, favoritter, hastighed, længde, mindst afspillet), og klik på et billede for at vælge
-det til/fra sessioner. ★/👎 kan sættes direkte på kortet. Esc lukker.
+**Big overview:** "⊞ Show big pictures" opens a grid with big pictures, titles, actors and year from the Jellyfin
+`.nfo` files. Search title/actor/genre/studio, filter by genre, actor and category, sort (name, favourites,
+speed, length, least played), and click a picture to select it for sessions or not. ★/👎 can be set directly on
+the card. Esc closes.
 
-**Thumbnails:** Vises i biblioteket. De laves én gang med ffmpeg fra videoens egen poster
-(`<navn>-poster.jpg`, `folder.jpg` osv.) eller et billede fra videoen, og gemmes i den lokale cache
-(`...\FunscriptSession\thumbs`). Biblioteket røres ikke.
+**Thumbnails:** Shown in the library. They are made once with ffmpeg from the video's own poster
+(`<name>-poster.jpg`, `folder.jpg` and so on) or a frame from the video, and stored in the local cache
+(`...\FunscriptSession\thumbs`). The library is not touched.
 
-**Tempo:** Skyderen ved afspilleren (50–150%, eller `[` og `]`) ændrer tempoet for både video og Handy.
+**Tempo:** The slider at the player (50–150%, or `[` and `]`) changes the tempo of both the video and the Handy.
 
-**Maks hastighed:** Undgår stykker over grænsen og gør for hurtige slag kortere, så intet slag i
-sessionen overstiger den. Bemærk at tempo over 100% gør slagene hurtigere igen.
+**Max speed:** Avoids parts above the limit and shortens strokes that are too fast, so no stroke in the session
+goes over it. Note that a tempo over 100% makes the strokes faster again.
 
-**Forløb:** Konstant, Opbygning, Bølger, Edging (tre opbygninger med pauser) og Finale (roligt,
-så et hurtigt sidste stykke), samt Hele turen (Opbygning → Bølger → Edging → Finale i én session:
-25% / 25% / 30% / 20%). Kortere tid per video giver blødere kurver.
+**Stroke range:** Under Adjustment, limits how far the Handy moves (e.g. 20–80). It is remembered.
 
-Genveje: mellemrum = afspil/pause, ←/→ = 10 sek, N = næste klip, F = fuldskærm, `[`/`]` = tempo.
-Klik på videoen = afspil/pause, dobbeltklik = fuldskærm. I fuldskærm vises en kontrollinje,
-når musen bevæges.
+**Courses:** Constant, Build-up, Waves, Edging (three build-ups with pauses) and Finale (calm, then a fast last
+part), plus The whole ride (Build-up → Waves → Edging → Finale in one session: 25% / 25% / 30% / 20%). A shorter
+time per video gives smoother curves.
 
-## 📺 Se sessioner på tv (TvFin)
+Shortcuts: space = play/pause, ←/→ = 10 s, N = next clip, ↑/↓ = harder/calmer, F = fullscreen, H = hold still,
+B = mark a spot, E = close (edge game), `[`/`]` = tempo, ? = help. Click the video = play/pause, double-click =
+fullscreen. In fullscreen a control bar is shown when the mouse moves.
 
-Gemte sessioner kan afspilles på et Samsung-tv med [TvFin](https://github.com/Tntdruid/TvFin) (Jellyfin-appen
-til Tizen). Tv'et afspiller klippene efter hinanden og styrer Handy'en direkte (Handy API v3, HSSP).
+## 📺 Watch sessions on a TV (TvFin)
 
-1. Slå **📱 Fjernbetjening → Styr fra mobilen** til. Under den står adressen tv'et skal bruge (fx `192.168.1.20:8001`).
-2. På tv'et: **⚙ Indstillinger → Tilslut Funscript**. Tv'et søger selv nettet igennem og viser PC'en – vælg den
-   (eller skriv adressen, hvis den ikke findes). Tv'et viser en kode.
-3. På PC'en dukker **"📺 Et tv vil forbinde · kode 1234"** op nederst til højre. Tjek at koden passer og tryk **Tillad**.
-   Med "Send Handy-opsætningen med" får tv'et dit Application ID og din forbindelseskode, så de ikke skal tastes på tv'et.
-4. Tv'et viser nu sessionerne (🎬 Funscript på forsiden). Fjernbetjening: ◀ ▶ spol 10 sek, ▲ næste klip,
-   ▼ forrige klip, OK pause, Tilbage stop.
-5. Tv'et melder tilbage til appen: sessionen tæller som afspillet, spilletiden kommer med i 📊 Statistik, og
-   positionen gemmes. Stopper du midt i en session, står **▶ Fortsæt «navn» fra …** øverst på tv'ets Funscript-skærm –
-   og "Fortsæt" på PC'en tilbyder samme sted (og omvendt).
+Saved sessions can be played on a Samsung TV with [TvFin](https://github.com/Tntdruid/TvFin) (the Jellyfin app for
+Tizen). The TV plays the clips one after another and drives the Handy directly (Handy API v3, HSSP).
 
-Sikkerhed: kun fjernbetjenings-serveren (port 8001) kan nås fra netværket. Tv'et får nøglen først når du trykker
-Tillad på PC'en, og kan derefter kun *læse* sessioner og streame deres videoer (`/tv/...`) – plus melde
-afspillet, spilletid og position tilbage. "Nyt link" laver en ny
-nøgle, så tv'et (og mobilen) skal forbindes igen.
+1. Turn on **📱 Remote → Control from phone**. Below it is the address the TV needs (e.g. `192.168.1.20:8001`).
+2. On the TV: **⚙ Settings → Connect Funscript**. The TV searches the network by itself and shows the PC – pick it
+   (or type the address if it is not found). The TV shows a code.
+3. On the PC, **"📺 A TV wants to connect · code 1234"** pops up at the bottom right. Check that the code matches
+   and press **Allow**. With "Send the Handy set-up along" the TV gets your Application ID and connection key, so
+   they don't have to be typed on the TV.
+4. The TV now shows the sessions (🎬 Funscript on the home screen). Remote: ◀ ▶ seek 10 s, ▲ next clip,
+   ▼ previous clip, OK pause, Back stop.
+5. The TV reports back to the app: the session counts as played, the played time shows up in 📊 Statistics, and
+   the position is saved. If you stop in the middle of a session, **▶ Continue «name» from …** is shown at the top
+   of the TV's Funscript screen – and "Continue" on the PC offers the same place (and the other way round).
 
-## Sprog / Language
+Security: only the remote server (port 8001) can be reached from the network. The TV only gets the key when you
+press Allow on the PC, and can then only *read* sessions and stream their videos (`/tv/...`) – plus report played,
+played time and position back. "New link" makes a new key, so the TV (and the phone) have to connect again.
 
-Appen findes på dansk og engelsk – skift med **DA/EN** øverst til venstre (valget huskes; første
-gang bruges browserens sprog). Alle tekster er skrevet på dansk i koden; `web/i18n.js` har den
-engelske ordbog, så en ny tekst skal også tilføjes dér. Serverens fejlbeskeder og nye sessionsnavne
-følger det valgte sprog.
+## Language
 
-## Filer
+The app is available in Danish and English – switch with **DA/EN** at the top left (the choice is remembered; the
+first time the browser's language is used). All texts are written in Danish in the code; `web/i18n.js` has the
+English dictionary, so a new text must be added there too. The server's error messages and new session names
+follow the chosen language.
 
-- `server.py` – HTTP-server, API og video-streaming (med Range/seek)
-- `funlib.py` – scanning, analyse, database og session-bygger
+## Files
+
+- `server.py` – HTTP server, API and video streaming (with Range/seek)
+- `funlib.py` – scanning, analysis, database and session builder
+- `remote.py` – the remote and TV server (port 8001)
+- `beatgen.py` – beat and vib scripts from music (optional, needs librosa)
 - `web/` – frontend (vanilla HTML/CSS/JS)
 
-Miljøvariabler: `FUNSCRIPT_DB` (sti til database), `FUNSCRIPT_PORT` (standard 8000).
+Environment variables: `FUNSCRIPT_DB` (path to the database), `FUNSCRIPT_PORT` (default 8000),
+`FUNSCRIPT_REMOTE_PORT` (default 8001), `FUNSCRIPT_GENERATED` (folder for generated scripts).
+
+See [CHANGELOG.md](CHANGELOG.md) for changes.
