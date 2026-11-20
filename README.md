@@ -246,7 +246,9 @@ Tizen). The TV plays the clips one after another and drives the Handy directly (
    and press **Allow**. With "Send the Handy set-up along" the TV gets your Application ID and connection key, so
    they don't have to be typed on the TV.
 4. The TV now shows the sessions (🎬 Funscript on the home screen). Remote: ◀ ▶ seek 10 s, ▲ next clip,
-   ▼ previous clip, OK pause, Back stop.
+   ▼ previous clip, CH +/– (or blue/yellow) tempo, green 100 %, OK pause, Back stop.
+   Vibrators and strokers: turn on **⚙ Settings → 📳 Intiface** on the TV, and in Intiface Central on this PC turn on
+   "Listen on all network interfaces". They follow the session's vib tracks (motor 1/2) and stroke script.
 5. The TV reports back to the app: the session counts as played, the played time shows up in 📊 Statistics, and
    the position is saved. If you stop in the middle of a session, **▶ Continue «name» from …** is shown at the top
    of the TV's Funscript screen – and "Continue" on the PC offers the same place (and the other way round).

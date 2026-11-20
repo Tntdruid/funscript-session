@@ -13,7 +13,7 @@ https://github.com/Tntdruid/TvFin), brugerens egen Jellyfin-app til Tizen.
   - `GET /tv/hello` (uden nøgle) → `{app: "Funscript Session", name: <pc-navn>}`, så TvFin kan finde PC'en ved at
     scanne nettet på port 8001. Afslører intet andet.
   - Læs-kun endpoints med nøglen (`?k=` = `remote_key`): `/tv/info`, `/tv/sessions` (inkl. `thumbVideoId`),
-    `/tv/sessions/<id>` (id, name, totalMs, clips, actions), `/tv/media/<videoId>` (Range), `/tv/thumb/<videoId>`.
+    `/tv/sessions/<id>` (id, name, totalMs, clips, actions, vib, vib2 – vib-sporene bruges af tv'ets Intiface), `/tv/media/<videoId>` (Range), `/tv/thumb/<videoId>`.
   - CORS (`Access-Control-Allow-Origin: *`) og `OPTIONS` på `/tv/...`.
 - `server.py`: `GET /api/tv/pending` og `POST /api/tv/answer {id, allow, handy}` (kun 127.0.0.1).
 - `web/`: banner nederst til højre "📺 Et tv vil forbinde · kode …" med Tillad/Afvis og "Send Handy-opsætningen med"

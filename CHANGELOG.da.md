@@ -4,6 +4,11 @@
 
 Alle ændringer i Funscript Session. Genstart serveren (`Start Funscript.bat`) efter en opdatering.
 
+## 1.1.0 – 2026-11-20
+
+### Tilføjet
+- **Tv (TvFin): vibratorer og tempo.** En session, der sendes til tv'et, har nu sine vibrator-spor med (`vib`/`vib2`), så TvFin 1.11.0 kan styre vibratorer og strokere via Intiface Central på denne PC, ligesom appen. TvFin har også fået tempo (50–150 %) for video og Handy.
+
 ## 1.0.0 – 2026-11-20
 
 Første version med versionsnummer. Alt herunder blev lavet før; fremover får hver udgivelse sit eget afsnit.

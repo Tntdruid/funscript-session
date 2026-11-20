@@ -254,7 +254,9 @@ til Tizen). Tv'et afspiller klippene efter hinanden og styrer Handy'en direkte (
 3. På PC'en dukker **"📺 Et tv vil forbinde · kode 1234"** op nederst til højre. Tjek at koden passer og tryk **Tillad**.
    Med "Send Handy-opsætningen med" får tv'et dit Application ID og din forbindelseskode, så de ikke skal tastes på tv'et.
 4. Tv'et viser nu sessionerne (🎬 Funscript på forsiden). Fjernbetjening: ◀ ▶ spol 10 sek, ▲ næste klip,
-   ▼ forrige klip, OK pause, Tilbage stop.
+   ▼ forrige klip, CH +/– (eller blå/gul) tempo, grøn 100 %, OK pause, Tilbage stop.
+   Vibratorer og strokere: slå **⚙ Indstillinger → 📳 Intiface** til på tv'et, og slå "Listen on all network
+   interfaces" til i Intiface Central på denne PC. De følger sessionens vib-spor (motor 1/2) og stroke-script.
 5. Tv'et melder tilbage til appen: sessionen tæller som afspillet, spilletiden kommer med i 📊 Statistik, og
    positionen gemmes. Stopper du midt i en session, står **▶ Fortsæt «navn» fra …** øverst på tv'ets Funscript-skærm –
    og "Fortsæt" på PC'en tilbyder samme sted (og omvendt).

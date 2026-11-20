@@ -4,6 +4,11 @@
 
 All changes to Funscript Session. Restart the server (`Start Funscript.bat`) after updating.
 
+## 1.1.0 – 2026-11-20
+
+### Added
+- **TV (TvFin): vibrators and tempo.** A session sent to the TV now includes its vibrator tracks (`vib`/`vib2`), so TvFin 1.11.0 can drive vibrators and strokers through Intiface Central on this PC, like the app does. TvFin also got tempo (50–150 %) for the video and the Handy.
+
 ## 1.0.0 – 2026-11-20
 
 First versioned release. Everything below was built before it; from now on each release has its own entry.

@@ -257,7 +257,9 @@ def _handler(remote):
                 s = lib.session(int(m.group(1)))
                 if not s:
                     return self._json({"error": "Ukendt session"}, 404)
-                return self._json({k: s[k] for k in ("id", "name", "totalMs", "clips", "actions")})
+                # vib/vib2: vibrator tracks (motor 1 / motor 2) for Intiface devices driven from the TV
+                return self._json({k: s.get(k) or [] if k in ("vib", "vib2") else s[k]
+                                   for k in ("id", "name", "totalMs", "clips", "actions", "vib", "vib2")})
             m = re.fullmatch(r"/tv/media/(\d+)", path)
             if m:
                 media = lib.media_path(int(m.group(1)))
