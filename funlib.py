@@ -1489,7 +1489,8 @@ class Library:
         }
 
     def update_session(self, session):
-        """Store edited clips/tracks of an existing session and refresh its exported files."""
+        """Store edited clips/tracks of an existing session and refresh its exported files.
+        Returns None when the session no longer exists."""
         with self.lock, self.conn:
             self.conn.execute(
                 "UPDATE sessions SET total_ms=?, clips=?, actions=?, vib=? WHERE id=?",
@@ -1497,6 +1498,8 @@ class Library:
                  json.dumps({"vib": session.get("vib", []), "vib2": session.get("vib2", [])}),
                  session["id"]))
         saved = self.session(session["id"])
+        if saved is None:  # deleted while it was being steered or edited
+            return None
         try:
             saved["file"] = str(self.export_session(saved, overwrite=True))
         except OSError as exc:

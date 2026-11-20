@@ -51,6 +51,7 @@ MESSAGES_EN = {
     "Videoen har ingen script at lave vib ud fra": "The video has no script to make vib from",
     "Fandt ikke nok beats i musikken": "Found too few beats in the music",
     "Ukendt video": "Unknown video",
+    "Sessionen findes ikke længere": "The session no longer exists",
     "Det er ikke en backup fra Funscript Session": "This is not a Funscript Session backup",
     "Backup-filen kunne ikke læses": "The backup file could not be read",
 }
@@ -374,7 +375,7 @@ class Handler(SimpleHTTPRequestHandler):
                                         data.get("seed"), LIBRARY.taste(), LIBRARY.recent_use())
             except (KeyError, TypeError, ValueError) as exc:
                 return self.send_json({"error": str(exc) or "Ugyldig styring"}, 400)
-            return self.send_json(LIBRARY.update_session(rebuilt))
+            return self.send_saved(LIBRARY.update_session(rebuilt))
 
         m = re.fullmatch(r"/api/sessions/(\d+)/(edit|swap)", path)
         if m:
@@ -405,7 +406,7 @@ class Handler(SimpleHTTPRequestHandler):
                 rebuilt = rebuild_session(session, clips, LIBRARY.script_actions, LIBRARY.vib_actions)
             except (KeyError, TypeError, ValueError) as exc:
                 return self.send_json({"error": str(exc) or "Ugyldig ændring"}, 400)
-            return self.send_json(LIBRARY.update_session(rebuilt))
+            return self.send_saved(LIBRARY.update_session(rebuilt))
 
         m = re.fullmatch(r"/api/sessions/(\d+)/rename", path)
         if m:
@@ -533,6 +534,12 @@ class Handler(SimpleHTTPRequestHandler):
             return data if isinstance(data, dict) else None
         except (ValueError, UnicodeDecodeError):
             return None
+
+    def send_saved(self, session):
+        """Reply with an updated session, or 404 if it was deleted meanwhile."""
+        if session is None:
+            return self.send_json({"error": "Sessionen findes ikke længere"}, 404)
+        return self.send_json(session)
 
     def send_json(self, payload, status=200):
         if isinstance(payload, dict) and payload.get("error"):
