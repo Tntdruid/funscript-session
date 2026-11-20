@@ -224,6 +224,8 @@ det til/fra sessioner. ★/👎 kan sættes direkte på kortet. Esc lukker.
 **Thumbnails:** Vises i biblioteket. De laves én gang med ffmpeg fra videoens egen poster
 (`<navn>-poster.jpg`, `folder.jpg` osv.) eller et billede fra videoen, og gemmes i den lokale cache
 (`...\FunscriptSession\thumbs`). Biblioteket røres ikke.
+Hver Scan rydder op i cachen: omkodede mp4'er og miniaturer til videoer, der ikke er i biblioteket længere,
+mp4'er der er ældre end deres video, og rester fra en afbrudt omkodning. Intet, der stadig bruges, bliver slettet.
 
 **Tempo:** Skyderen ved afspilleren (50–150%, eller `[` og `]`) ændrer tempoet for både video og Handy.
 

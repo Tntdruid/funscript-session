@@ -867,12 +867,45 @@ class Library:
                 rows = self.conn.execute("SELECT id, path FROM videos").fetchall()
                 removed = [r["id"] for r in rows if r["path"] not in seen]
                 self.conn.executemany("DELETE FROM videos WHERE id=?", [(i,) for i in removed])
+            cleaned = self.clean_cache()
         finally:
             self.scan_state["running"] = False
         summary = {"folder": str(folder), "found": len(files), "added": added,
-                   "updated": updated, "removed": len(removed)}
+                   "updated": updated, "removed": len(removed),
+                   "cleanedFiles": cleaned["files"], "cleanedMb": round(cleaned["bytes"] / 1e6)}
         self.scan_state["message"] = json.dumps(summary)
         return summary
+
+    def clean_cache(self):
+        """Remove cache files nothing uses any more (run after each scan): converted mp4s and
+        thumbnails of videos that left the library, mp4s older than their video, and leftover
+        .part files from an interrupted conversion. Never touches the library itself."""
+        with self.lock:
+            mtimes = {r["id"]: r["video_mtime"] for r in self.conn.execute("SELECT id, video_mtime FROM videos")}
+        doomed = []
+        cache = remux_dir()
+        for f in cache.glob("*.mp4"):
+            vid = int(f.stem) if f.stem.isdigit() else None
+            if vid is None:
+                continue
+            if vid not in mtimes or (mtimes[vid] and f.stat().st_mtime < mtimes[vid]):
+                doomed.append(f)
+        if not self.remux_state.get("running"):  # a running conversion writes a .part file
+            doomed.extend(f for f in cache.glob("*.part") if time.time() - f.stat().st_mtime > 3600)
+        for f in thumb_dir().glob("*.jpg"):
+            head = f.stem.split("_")[0]
+            if head.isdigit() and int(head) not in mtimes:
+                doomed.append(f)
+        freed = files = 0
+        for f in doomed:
+            try:
+                size = f.stat().st_size
+                f.unlink()
+                freed += size
+                files += 1
+            except OSError:
+                pass  # in use (e.g. being streamed); next scan tries again
+        return {"files": files, "bytes": freed}
 
     def _scan_one(self, path):
         stat = path.stat()

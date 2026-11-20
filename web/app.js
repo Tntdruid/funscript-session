@@ -766,6 +766,7 @@ async function scanLibrary() {
         const summary = status.message ? JSON.parse(status.message) : null;
         ui.scanStatus.textContent = summary
           ? t('{found} videoer · {added} nye · {updated} opdateret · {removed} fjernet', summary)
+            + (summary.cleanedFiles ? ` · ${t('{n} gamle cache-filer ryddet op ({mb} MB)', { n: summary.cleanedFiles, mb: summary.cleanedMb })}` : '')
           : t('Færdig');
         break;
       }

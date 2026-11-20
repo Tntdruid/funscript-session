@@ -115,6 +115,7 @@ const EN = {
   '{a} valgt · {b} vist': '{a} selected · {b} shown',
   'Scanner… {a}/{b}': 'Scanning… {a}/{b}',
   '{found} videoer · {added} nye · {updated} opdateret · {removed} fjernet': '{found} videos · {added} new · {updated} updated · {removed} removed',
+  '{n} gamle cache-filer ryddet op ({mb} MB)': '{n} old cache files cleaned up ({mb} MB)',
   'Konverter MPEG-TS ({n})': 'Convert MPEG-TS ({n})',
   'Konverterer {a}/{b}: {name} · {pct}%': 'Converting {a}/{b}: {name} · {pct}%',
   'Fejlede: {list}': 'Failed: {list}',

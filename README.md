@@ -216,6 +216,8 @@ the card. Esc closes.
 **Thumbnails:** Shown in the library. They are made once with ffmpeg from the video's own poster
 (`<name>-poster.jpg`, `folder.jpg` and so on) or a frame from the video, and stored in the local cache
 (`...\FunscriptSession\thumbs`). The library is not touched.
+Each Scan cleans up the cache: converted mp4s and thumbnails of videos that left the library, mp4s older than
+their video, and leftovers from an interrupted conversion. Nothing that is still in use is removed.
 
 **Tempo:** The slider at the player (50–150%, or `[` and `]`) changes the tempo of both the video and the Handy.
 
