@@ -240,9 +240,23 @@ def interpolate(actions, at):
     return int(round(p0 + (p1 - p0) * (at - a0) / max(1, a1 - a0)))
 
 
+# ---------------------------------------------------------------- portable mode
+# With its own Python in python\ (made by make-portable.ps1) the app is portable: ffmpeg/ffprobe come
+# from bin\ and the cache lives in data\, so the whole app is one folder that can be moved.
+
+APP_DIR = Path(__file__).resolve().parent
+PORTABLE = (APP_DIR / "python" / "python.exe").is_file() or os.environ.get("FUNSCRIPT_PORTABLE") == "1"
+
+
+def find_tool(name):
+    """ffmpeg/ffprobe from the app's bin folder, otherwise from PATH."""
+    local = APP_DIR / "bin" / (name + ".exe")
+    return str(local) if local.is_file() else shutil.which(name)
+
+
 # ---------------------------------------------------------------- media probing
 
-_FFPROBE = shutil.which("ffprobe")
+_FFPROBE = find_tool("ffprobe")
 
 
 def probe_media(path):
@@ -279,9 +293,10 @@ def needs_remux(container):
 # MPEG-TS files are copied (never re-encoded) into a real mp4 in a local cache folder.
 # The source files are only ever read; all output goes to REMUX_DIR.
 
-_FFMPEG = shutil.which("ffmpeg")
+_FFMPEG = find_tool("ffmpeg")
 REMUX_DIR = Path(os.environ.get("FUNSCRIPT_CACHE")
-                 or Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "FunscriptSession" / "cache")
+                 or (APP_DIR / "data" / "cache" if PORTABLE
+                     else Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "FunscriptSession" / "cache"))
 
 
 def remux_dir():

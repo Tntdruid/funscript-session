@@ -16,6 +16,17 @@ Open http://127.0.0.1:8000 – choose the folder with your videos and press **Sc
 Only needs Python 3.9+ (no packages; tested with 3.12). `ffprobe` is used for the video length when it is
 installed, otherwise the length of the script is used.
 
+### Portable (everything in one folder)
+
+Run `make-portable.ps1` once (PowerShell in the app folder:
+`powershell -ExecutionPolicy Bypass -File make-portable.ps1`). It puts its own Python with librosa in `python\`,
+ffmpeg/ffprobe in `bin\` and the cache in `data\` (copied from `%LOCALAPPDATA%\FunscriptSession`). The database,
+`sessions\` and `Genererede scripts\` already live in the folder. After that the whole app is one folder that can
+be copied to another PC or a USB stick; `Start Funscript.bat` uses `python\` when it is there. Your videos stay
+where they are (the library is only read). `-NoLibrosa` skips librosa (smaller, but no new beat scripts), `-Zip`
+also makes `dist\FunscriptSession-portable-<version>.zip` with the program only – never your database, sessions or
+scripts.
+
 ## How it works
 
 1. **Scan** finds videos and their script by file name (`Video.mp4` → `Video.funscript`).

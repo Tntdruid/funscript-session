@@ -6,6 +6,7 @@ work; there is one stroke per beat (bottom on the beat), its length follows the 
 quiet passages hold still.
 """
 import shutil
+from pathlib import Path
 import subprocess
 
 SR = 22050
@@ -16,7 +17,8 @@ MIN_STROKE_MS = 300  # faster than 200 strokes/min: one stroke per two beats
 QUIET_LEVEL = 0.08   # below this (share of the loud parts) the music counts as silent
 MAX_GAP_BEATS = 1.7  # a gap longer than this many beats gets the missing beats filled in
 
-_FFMPEG = shutil.which("ffmpeg")
+_LOCAL_FFMPEG = Path(__file__).resolve().parent / "bin" / "ffmpeg.exe"  # portable copy, see funlib.find_tool
+_FFMPEG = str(_LOCAL_FFMPEG) if _LOCAL_FFMPEG.is_file() else shutil.which("ffmpeg")
 
 
 def available():

@@ -39,6 +39,15 @@ edge-spil og stemme-coach på tv'et.
 `FUNSCRIPT_DB=<kopi>.db FUNSCRIPT_PORT=18000 FUNSCRIPT_REMOTE_PORT=18001 FUNSCRIPT_REMOTE_HOST=127.0.0.1 python server.py`
 (sæt `export_path` i kopiens settings til en temp-mappe, ellers skriver den .funscript-filer i `sessions\`).
 
+## Portabel udgave
+
+`make-portable.ps1` gør app-mappen portabel: `python\` (embeddable Python 3.12.10 + pip + librosa), `bin\`
+(ffmpeg/ffprobe fra gyan.dev) og `data\` (cachen, kopieret fra `%LOCALAPPDATA%\FunscriptSession`). I koden:
+`funlib.PORTABLE` er sand når `python\python.exe` findes (eller `FUNSCRIPT_PORTABLE=1`); så er `REMUX_DIR`
+`data\cache` (thumbs/voice ved siden af), og `funlib.find_tool()`/`beatgen._FFMPEG` foretrækker `bin\`.
+`Start Funscript.bat` bruger `python\python.exe` hvis den findes. `python\`, `bin\`, `data\`, `dist\` er i
+`.gitignore`. `-Zip` laver en zip uden personlige data (db, sessions, Genererede scripts, data) til en release.
+
 ## Udgivelse ("push" i dette repo)
 
 Første version var **1.0.0** (2026-11-20). Ved "push":

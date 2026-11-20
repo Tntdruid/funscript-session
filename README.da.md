@@ -16,6 +16,17 @@ python server.py
 Kræver kun Python 3.9+ (ingen pakker; testet med 3.12). `ffprobe` bruges til videolængde hvis det er installeret,
 ellers bruges længden af scriptet.
 
+### Portabel (alt i én mappe)
+
+Kør `make-portable.ps1` én gang (PowerShell i app-mappen:
+`powershell -ExecutionPolicy Bypass -File make-portable.ps1`). Den lægger sin egen Python med librosa i `python\`,
+ffmpeg/ffprobe i `bin\` og cachen i `data\` (kopieret fra `%LOCALAPPDATA%\FunscriptSession`). Databasen,
+`sessions\` og `Genererede scripts\` ligger allerede i mappen. Derefter er hele appen én mappe, der kan kopieres
+til en anden PC eller en USB-pind; `Start Funscript.bat` bruger `python\`, når den findes. Dine videoer bliver,
+hvor de er (biblioteket bliver kun læst). `-NoLibrosa` springer librosa over (mindre, men ingen nye beat-scripts),
+`-Zip` laver også `dist\FunscriptSession-portable-<version>.zip` med kun programmet – aldrig din database,
+sessioner eller scripts.
+
 ## Sådan virker det
 
 1. **Scan** finder videoer og deres script på filnavn (`Video.mp4` → `Video.funscript`).
